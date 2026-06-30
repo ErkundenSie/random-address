@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>随机地址生成器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Address Generator</p>
+          <h1>随机地址生成器</h1>
+          <p class="subtitle">快速生成、复制美国地址与联系信息。</p>
+        </div>
+        <button id="generateBtn" class="primary-btn" type="button">
+          生成随机地址
+        </button>
+      </section>
+
+      <section class="panel controls" aria-label="生成设置">
+        <label>
+          地址来源
+          <select id="sourceSelect">
+            <option value="real">真实地址接口（默认）</option>
+            <option value="original">原始本地逻辑</option>
+            <option value="fake">fakeaddressgenerator</option>
+            <option value="nominatim">Nominatim Reverse</option>
+          </select>
+        </label>
+
+        <label>
+          州范围
+          <select id="stateModeSelect">
+            <option value="tax-free">
+              免税州随机（OR / DE / NH / MT / AK）
+            </option>
+            <option value="mixed">混合州随机</option>
+            <option value="specific">指定州</option>
+          </select>
+        </label>
+
+        <label id="stateWrap" class="is-hidden">
+          指定州
+          <select id="stateSelect"></select>
+        </label>
+
+        <label class="check-row">
+          <input id="fallbackCheck" type="checkbox" checked />
+          接口失败时自动回退到原始本地逻辑
+        </label>
+      </section>
+
+      <div class="content-grid">
+        <section class="panel result-panel" aria-label="生成结果">
+          <div class="result-header">
+            <p class="eyebrow">Result</p>
+            <div class="result-tools">
+              <button id="openMapBtn" type="button" disabled>地图核验</button>
+              <button id="openSourceBtn" type="button" disabled>
+                打开源站
+              </button>
+              <span id="sourceBadge" class="badge">未生成</span>
+            </div>
+          </div>
+
+          <div class="address-card">
+            <div class="address-line" id="fullAddress">
+              点击“生成随机地址”开始。
+            </div>
+            <div class="grid">
+              <div><span>姓名</span><strong id="nameValue">-</strong></div>
+              <div><span>邮箱</span><strong id="emailValue">-</strong></div>
+              <div><span>电话</span><strong id="phoneValue">-</strong></div>
+              <div><span>地址 1</span><strong id="line1Value">-</strong></div>
+              <div><span>城市</span><strong id="cityValue">-</strong></div>
+              <div><span>州</span><strong id="stateValue">-</strong></div>
+              <div><span>邮编</span><strong id="zipValue">-</strong></div>
+              <div><span>国家</span><strong id="countryValue">-</strong></div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="copyAddressBtn" type="button" disabled>复制地址</button>
+            <button id="copyJsonBtn" type="button" disabled>复制 JSON</button>
+          </div>
+        </section>
+
+        <aside class="side-stack">
+          <section class="panel history-panel" aria-label="最近生成历史">
+            <div class="result-header compact-header">
+              <div>
+                <p class="eyebrow">History</p>
+                <h2>最近 10 条</h2>
+              </div>
+              <button id="clearHistoryBtn" type="button">清空</button>
+            </div>
+            <div id="historyList" class="history-list">
+              <p class="empty-text">暂无历史记录</p>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

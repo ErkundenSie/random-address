@@ -1,0 +1,13 @@
+services:
+  random-address-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: random-address-generator
+    ports:
+      - "8787:8787"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      NODE_ENV: production
+    restart: unless-stopped
