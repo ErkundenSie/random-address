@@ -1,4 +1,5 @@
 const ADDRESS_SOURCE = {
+  LOCAL: "local",
   REAL: "real",
   ORIGINAL: "original",
   FAKE: "fake",
@@ -7,9 +8,11 @@ const ADDRESS_SOURCE = {
 
 const SETTINGS_KEY = "random_address_generator_settings_v2";
 const HISTORY_KEY = "random_address_generator_history_v1";
+const PROXY_CONFIG_HEADER = "x-proxy-config";
 const FAKE_ADDRESS_API_URL = "https://fakeaddressgenerator.click/api/generate";
 const NOMINATIM_REVERSE_API_URL = "https://nominatim.openstreetmap.org/reverse";
 const SOURCE_SITE_URLS = {
+  local: "https://github.com/chatgptuk/Real-US-Address-Generator",
   real: "https://www.zhenshidizhi.com/",
   zhenshidizhi: "https://www.zhenshidizhi.com/",
   fake: "https://fakeaddressgenerator.click/zh",
@@ -546,6 +549,7 @@ const state = {
   currentIdentity: null,
   isBusy: false,
   history: [],
+  lastFallbackNotice: "",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -630,17 +634,27 @@ function loadSettings() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     return {
-      source: parsed.source || ADDRESS_SOURCE.REAL,
+      source: parsed.source || ADDRESS_SOURCE.LOCAL,
       stateMode: parsed.stateMode || "tax-free",
       stateCode: parsed.stateCode || "OR",
       fallback: parsed.fallback !== false,
+      proxyType: parsed.proxyType || "direct",
+      proxyHost: parsed.proxyHost || "127.0.0.1",
+      proxyPort: parsed.proxyPort || "7890",
+      proxyUsername: parsed.proxyUsername || "",
+      proxyPassword: parsed.proxyPassword || "",
     };
   } catch (error) {
     return {
-      source: ADDRESS_SOURCE.REAL,
+      source: ADDRESS_SOURCE.LOCAL,
       stateMode: "tax-free",
       stateCode: "OR",
       fallback: true,
+      proxyType: "direct",
+      proxyHost: "127.0.0.1",
+      proxyPort: "7890",
+      proxyUsername: "",
+      proxyPassword: "",
     };
   }
 }
@@ -716,6 +730,49 @@ function normalizeRealAddressIdentity(data, expectedStateCode = "") {
   };
 }
 
+function normalizeLocalSourceIdentity(raw, expectedStateCode = "") {
+  if (!raw || typeof raw !== "object") throw new Error("本地源返回为空");
+  if (raw.error) throw new Error(raw.error);
+  if (!raw.name || !raw.line1 || !raw.city || !raw.state || !raw.zip) {
+    throw new Error("本地源返回字段不完整");
+  }
+
+  const resultState = String(raw.state).trim().toUpperCase();
+  const expectedState = String(expectedStateCode || "")
+    .trim()
+    .toUpperCase();
+  if (expectedState && resultState !== expectedState) {
+    throw new Error(
+      `本地源返回州不匹配: expected ${expectedState}, got ${resultState}`,
+    );
+  }
+
+  const safeName = String(raw.name).trim();
+  const emailName = safeName
+    .replace(/[^a-z0-9]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .toLowerCase();
+
+  return {
+    name: safeName,
+    email:
+      raw.email ||
+      `${emailName || "user"}.${Math.floor(Math.random() * 9999)}@gmail.com`,
+    phone: normalizePhone(raw.phone, raw.areaCode),
+    line1: toTitleCaseText(raw.line1),
+    line2: String(raw.line2 || ""),
+    city: toTitleCaseText(raw.city),
+    state: resultState,
+    zip: normalizeZip5(raw.zip),
+    country: String(raw.country || "US").toUpperCase(),
+    areaCode: raw.areaCode,
+    lat: raw.lat,
+    lng: raw.lng,
+    stateName: raw.stateName || getStateNameByCode(resultState),
+    source: ADDRESS_SOURCE.LOCAL,
+  };
+}
+
 function saveSettings() {
   localStorage.setItem(
     SETTINGS_KEY,
@@ -724,8 +781,102 @@ function saveSettings() {
       stateMode: $("stateModeSelect").value,
       stateCode: $("stateSelect").value,
       fallback: $("fallbackCheck").checked,
+      proxyType: $("proxyTypeSelect").value,
+      proxyHost: $("proxyHostInput").value,
+      proxyPort: $("proxyPortInput").value,
+      proxyUsername: $("proxyUsernameInput").value,
+      proxyPassword: $("proxyPasswordInput").value,
     }),
   );
+}
+
+function getProxyConfigFromUi() {
+  const type = String($("proxyTypeSelect").value || "direct")
+    .trim()
+    .toLowerCase();
+  if (!type || type === "direct") return null;
+
+  const host = String($("proxyHostInput").value || "").trim();
+  const portText = String($("proxyPortInput").value || "").trim();
+  const port = Number(portText);
+
+  if (!host) throw new Error("请先填写代理主机");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("代理端口无效");
+  }
+
+  return {
+    type,
+    host,
+    port,
+    username: String($("proxyUsernameInput").value || "").trim(),
+    password: String($("proxyPasswordInput").value || ""),
+  };
+}
+
+function buildLocalApiOptions(options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const proxyConfig = getProxyConfigFromUi();
+  if (proxyConfig) {
+    headers[PROXY_CONFIG_HEADER] = encodeURIComponent(
+      JSON.stringify(proxyConfig),
+    );
+  }
+  return { ...options, headers };
+}
+
+function updateProxyVisibility() {
+  const type = $("proxyTypeSelect").value;
+  const disabled = type === "direct";
+  const host = String($("proxyHostInput").value || "").trim();
+  const port = String($("proxyPortInput").value || "").trim();
+  [
+    "proxyHostInput",
+    "proxyPortInput",
+    "proxyUsernameInput",
+    "proxyPasswordInput",
+  ].forEach((id) => {
+    $(id).disabled = disabled;
+  });
+
+  const badge = $("proxyStatusBadge");
+  if (disabled) {
+    badge.textContent = "直连";
+    badge.classList.remove("is-active");
+    return;
+  }
+
+  const modeLabel = type === "http" ? "HTTP" : "SOCKS5";
+  badge.textContent =
+    host && port ? `${modeLabel} · ${host}:${port}` : modeLabel;
+  badge.classList.add("is-active");
+}
+
+function getStateModeLabel() {
+  const mode = $("stateModeSelect").value;
+  if (mode === "specific") return `指定州 · ${$("stateSelect").value || "OR"}`;
+  if (mode === "mixed") return "混合州";
+  return "免税州";
+}
+
+function updateSettingsSummary() {
+  $("settingsSourceBadge").textContent = getSourceLabel(
+    $("sourceSelect").value,
+  );
+  $("settingsStateBadge").textContent = getStateModeLabel();
+
+  const proxyType = $("proxyTypeSelect").value;
+  if (proxyType === "direct") {
+    $("settingsProxyBadge").textContent = $("fallbackCheck").checked
+      ? "直连 · 自动回退"
+      : "直连";
+    return;
+  }
+
+  const modeLabel = proxyType === "http" ? "HTTP 代理" : "SOCKS5 代理";
+  $("settingsProxyBadge").textContent = $("fallbackCheck").checked
+    ? `${modeLabel} · 自动回退`
+    : modeLabel;
 }
 
 function getStateNameByCode(stateCode) {
@@ -887,6 +1038,11 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
       );
     }
     return await response.json();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("请求超时");
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -902,14 +1058,14 @@ async function fetchIdentityFromFakeAddressApi() {
   const apiState = getApiStateName(stateCode);
   const data = await fetchWithTimeout(
     getLocalApiUrl("/api/fake-address"),
-    {
+    buildLocalApiOptions({
       method: "POST",
       headers: {
         accept: "application/json,text/plain,*/*",
         "content-type": "application/json",
       },
       body: JSON.stringify({ state: apiState }),
-    },
+    }),
     7000,
   );
   return normalizeApiIdentity(data, stateCode);
@@ -921,10 +1077,21 @@ async function fetchIdentityFromRealAddressApi() {
   const params = new URLSearchParams({ state: stateName });
   const data = await fetchWithTimeout(
     getLocalApiUrl(`/api/real-address?${params.toString()}`),
-    { headers: { accept: "application/json" } },
+    buildLocalApiOptions({ headers: { accept: "application/json" } }),
     7000,
   );
   return normalizeRealAddressIdentity(data, stateCode);
+}
+
+async function fetchIdentityFromLocalSource() {
+  const stateCode = pickStateCode();
+  const params = new URLSearchParams({ state: stateCode });
+  const data = await fetchWithTimeout(
+    getLocalApiUrl(`/api/local-address?${params.toString()}`),
+    buildLocalApiOptions({ headers: { accept: "application/json" } }),
+    8500,
+  );
+  return normalizeLocalSourceIdentity(data, stateCode);
 }
 
 function randomBetween(min, max) {
@@ -1081,7 +1248,7 @@ async function fetchIdentityFromNominatim() {
     try {
       const data = await fetchWithTimeout(
         buildNominatimProxyUrl(point),
-        { headers: { accept: "application/json" } },
+        buildLocalApiOptions({ headers: { accept: "application/json" } }),
         7500,
       );
       return normalizeNominatimIdentity(data, stateCode, point);
@@ -1099,6 +1266,8 @@ async function generateIdentity() {
   if (source === ADDRESS_SOURCE.ORIGINAL) return generateFallbackIdentity();
 
   try {
+    if (source === ADDRESS_SOURCE.LOCAL)
+      return await fetchIdentityFromLocalSource();
     if (source === ADDRESS_SOURCE.REAL)
       return await fetchIdentityFromRealAddressApi();
     if (source === ADDRESS_SOURCE.FAKE)
@@ -1109,21 +1278,42 @@ async function generateIdentity() {
   } catch (error) {
     if (!$("fallbackCheck").checked) throw error;
     const id = generateFallbackIdentity();
-    id.source = `${id.source}（${getSourceLabel(source)}失败回退：${error.message || error}）`;
+    id.fallbackSource = source;
+    id.fallbackError = error.message || String(error);
     return id;
   }
 }
 
 function getSourceLabel(source) {
-  if (source === ADDRESS_SOURCE.REAL || source === "zhenshidizhi")
+  const raw = String(source || "")
+    .trim()
+    .toLowerCase();
+  if (source === ADDRESS_SOURCE.LOCAL || raw.startsWith("local"))
+    return "本地源";
+  if (
+    source === ADDRESS_SOURCE.REAL ||
+    raw.startsWith("real") ||
+    raw.includes("zhenshidizhi")
+  )
     return "真实地址接口";
-  if (source === ADDRESS_SOURCE.ORIGINAL || source === "original")
+  if (source === ADDRESS_SOURCE.ORIGINAL || raw.startsWith("original"))
     return "原始本地逻辑";
-  if (source === ADDRESS_SOURCE.FAKE || source === "fakeaddressgenerator")
+  if (
+    source === ADDRESS_SOURCE.FAKE ||
+    raw.startsWith("fake") ||
+    raw.includes("fakeaddressgenerator")
+  )
     return "fakeaddressgenerator";
-  if (source === ADDRESS_SOURCE.NOMINATIM || source === "nominatim")
+  if (source === ADDRESS_SOURCE.NOMINATIM || raw.startsWith("nominatim"))
     return "Nominatim Reverse";
   return String(source || "未知来源");
+}
+
+function getFallbackNotice(identity) {
+  if (!identity?.fallbackSource) return "";
+  const reason = String(identity.fallbackError || "").trim();
+  const prefix = `${getSourceLabel(identity.fallbackSource)}不可用，已回退到原始本地逻辑`;
+  return reason ? `${prefix}：${reason}` : prefix;
 }
 
 function getSourceSiteUrl(source) {
@@ -1131,6 +1321,9 @@ function getSourceSiteUrl(source) {
     .trim()
     .toLowerCase();
   if (!raw) return "";
+  if (raw.startsWith("local")) {
+    return SOURCE_SITE_URLS.local;
+  }
   if (raw.startsWith("real") || raw.includes("zhenshidizhi")) {
     return SOURCE_SITE_URLS.real;
   }
@@ -1241,7 +1434,13 @@ async function handleGenerate() {
     const id = await generateIdentity();
     renderIdentity(id);
     addToHistory(id);
+    const fallbackNotice = getFallbackNotice(id);
+    if (fallbackNotice && fallbackNotice !== state.lastFallbackNotice) {
+      showToast(fallbackNotice, true);
+    }
+    state.lastFallbackNotice = fallbackNotice;
   } catch (error) {
+    state.lastFallbackNotice = "";
     showToast(error.message || String(error), true);
   } finally {
     setBusy(false);
@@ -1273,7 +1472,14 @@ function init() {
   $("stateModeSelect").value = settings.stateMode;
   $("stateSelect").value = settings.stateCode;
   $("fallbackCheck").checked = settings.fallback;
+  $("proxyTypeSelect").value = settings.proxyType;
+  $("proxyHostInput").value = settings.proxyHost;
+  $("proxyPortInput").value = settings.proxyPort;
+  $("proxyUsernameInput").value = settings.proxyUsername;
+  $("proxyPasswordInput").value = settings.proxyPassword;
   updateStateVisibility();
+  updateProxyVisibility();
+  updateSettingsSummary();
 
   $("generateBtn").addEventListener("click", handleGenerate);
   $("openMapBtn").addEventListener("click", () => {
@@ -1298,14 +1504,27 @@ function init() {
     if (state.currentIdentity)
       copyText(JSON.stringify(state.currentIdentity, null, 2));
   });
-  ["sourceSelect", "stateModeSelect", "stateSelect", "fallbackCheck"].forEach(
-    (id) => {
-      $(id).addEventListener("change", () => {
-        updateStateVisibility();
-        saveSettings();
-      });
-    },
-  );
+  [
+    "sourceSelect",
+    "stateModeSelect",
+    "stateSelect",
+    "fallbackCheck",
+    "proxyTypeSelect",
+    "proxyHostInput",
+    "proxyPortInput",
+    "proxyUsernameInput",
+    "proxyPasswordInput",
+  ].forEach((id) => {
+    const eventName =
+      id.endsWith("Select") || id === "fallbackCheck" ? "change" : "input";
+    $(id).addEventListener(eventName, () => {
+      state.lastFallbackNotice = "";
+      updateStateVisibility();
+      updateProxyVisibility();
+      updateSettingsSummary();
+      saveSettings();
+    });
+  });
   updateSourceButton("");
   updateMapButton(null);
   renderHistory();

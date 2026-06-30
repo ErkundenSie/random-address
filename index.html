@@ -9,66 +9,172 @@
   <body>
     <main class="app-shell">
       <section class="hero">
-        <div>
+        <div class="hero-copy">
           <p class="eyebrow">Address Generator</p>
           <h1>随机地址生成器</h1>
           <p class="subtitle">快速生成、复制美国地址与联系信息。</p>
         </div>
-        <button id="generateBtn" class="primary-btn" type="button">
-          生成随机地址
-        </button>
+        <div class="hero-actions">
+          <div class="hero-tip">支持本地源、接口源和代理转发</div>
+          <button id="generateBtn" class="primary-btn" type="button">
+            生成随机地址
+          </button>
+        </div>
       </section>
 
       <section class="panel controls" aria-label="生成设置">
-        <label>
-          地址来源
-          <select id="sourceSelect">
-            <option value="real">真实地址接口（默认）</option>
-            <option value="original">原始本地逻辑</option>
-            <option value="fake">fakeaddressgenerator</option>
-            <option value="nominatim">Nominatim Reverse</option>
-          </select>
-        </label>
+        <details id="settingsDetails" class="settings-shell">
+          <summary class="settings-summary">
+            <div class="settings-summary-copy">
+              <p class="eyebrow">Generator Settings</p>
+              <h2>生成设置</h2>
+              <p class="section-note compact-note">
+                结果优先展示，设置默认收起；需要时再展开调整。
+              </p>
+            </div>
+            <div class="settings-summary-meta">
+              <span id="settingsSourceBadge" class="settings-mini-badge"></span>
+              <span id="settingsStateBadge" class="settings-mini-badge"></span>
+              <span id="settingsProxyBadge" class="settings-mini-badge"></span>
+            </div>
+          </summary>
 
-        <label>
-          州范围
-          <select id="stateModeSelect">
-            <option value="tax-free">
-              免税州随机（OR / DE / NH / MT / AK）
-            </option>
-            <option value="mixed">混合州随机</option>
-            <option value="specific">指定州</option>
-          </select>
-        </label>
+          <div class="settings-body">
+            <div class="controls-main">
+              <label class="field-card">
+                <span class="field-label">地址来源</span>
+                <select id="sourceSelect">
+                  <option value="local">本地源（默认）</option>
+                  <option value="real">真实地址接口</option>
+                  <option value="original">原始本地逻辑</option>
+                  <option value="fake">fakeaddressgenerator</option>
+                  <option value="nominatim">Nominatim Reverse</option>
+                </select>
+              </label>
 
-        <label id="stateWrap" class="is-hidden">
-          指定州
-          <select id="stateSelect"></select>
-        </label>
+              <label class="field-card">
+                <span class="field-label">州范围</span>
+                <select id="stateModeSelect">
+                  <option value="tax-free">
+                    免税州随机（OR / DE / NH / MT / AK）
+                  </option>
+                  <option value="mixed">混合州随机</option>
+                  <option value="specific">指定州</option>
+                </select>
+              </label>
 
-        <label class="check-row">
-          <input id="fallbackCheck" type="checkbox" checked />
-          接口失败时自动回退到原始本地逻辑
-        </label>
+              <label id="stateWrap" class="field-card is-hidden">
+                <span class="field-label">指定州</span>
+                <select id="stateSelect"></select>
+              </label>
+
+              <label class="check-card">
+                <input id="fallbackCheck" type="checkbox" checked />
+                <span>
+                  <strong>自动回退</strong>
+                  <small>当前源失败时，自动切回原始本地逻辑</small>
+                </span>
+              </label>
+            </div>
+
+            <details id="proxyDetails" class="proxy-settings">
+              <summary class="proxy-header">
+                <div>
+                  <p class="eyebrow">Network</p>
+                  <p class="proxy-title">本地代理</p>
+                  <p class="proxy-note">
+                    仅作用于本地服务访问外部地址源，支持 HTTP / SOCKS5。
+                  </p>
+                </div>
+                <span id="proxyStatusBadge" class="proxy-status-badge"
+                  >直连</span
+                >
+              </summary>
+              <div class="proxy-grid">
+                <label class="field-card compact-field">
+                  代理类型
+                  <select id="proxyTypeSelect">
+                    <option value="direct">直连</option>
+                    <option value="http">HTTP</option>
+                    <option value="socks5">SOCKS5</option>
+                  </select>
+                </label>
+
+                <label class="field-card compact-field">
+                  主机
+                  <input
+                    id="proxyHostInput"
+                    type="text"
+                    inputmode="text"
+                    placeholder="127.0.0.1"
+                    autocomplete="off"
+                  />
+                </label>
+
+                <label class="field-card compact-field">
+                  端口
+                  <input
+                    id="proxyPortInput"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="7890"
+                    autocomplete="off"
+                  />
+                </label>
+
+                <label class="field-card compact-field">
+                  用户名
+                  <input
+                    id="proxyUsernameInput"
+                    type="text"
+                    inputmode="text"
+                    placeholder="可选"
+                    autocomplete="off"
+                  />
+                </label>
+
+                <label class="field-card compact-field">
+                  密码
+                  <input
+                    id="proxyPasswordInput"
+                    type="password"
+                    placeholder="可选"
+                    autocomplete="new-password"
+                  />
+                </label>
+              </div>
+            </details>
+          </div>
+        </details>
       </section>
 
       <div class="content-grid">
         <section class="panel result-panel" aria-label="生成结果">
-          <div class="result-header">
-            <p class="eyebrow">Result</p>
-            <div class="result-tools">
-              <button id="openMapBtn" type="button" disabled>地图核验</button>
-              <button id="openSourceBtn" type="button" disabled>
-                打开源站
-              </button>
-              <span id="sourceBadge" class="badge">未生成</span>
+          <div class="section-heading result-heading">
+            <div>
+              <p class="eyebrow">Result</p>
+              <h2>本次结果</h2>
             </div>
+            <span id="sourceBadge" class="badge">未生成</span>
           </div>
 
           <div class="address-card">
-            <div class="address-line" id="fullAddress">
-              点击“生成随机地址”开始。
+            <div class="address-overview">
+              <div class="address-copy">
+                <p class="field-label">完整地址</p>
+                <div class="address-line" id="fullAddress">
+                  点击“生成随机地址”开始。
+                </div>
+              </div>
+
+              <div class="result-tools">
+                <button id="openMapBtn" type="button" disabled>地图核验</button>
+                <button id="openSourceBtn" type="button" disabled>
+                  打开源站
+                </button>
+              </div>
             </div>
+
             <div class="grid">
               <div><span>姓名</span><strong id="nameValue">-</strong></div>
               <div><span>邮箱</span><strong id="emailValue">-</strong></div>
@@ -79,11 +185,13 @@
               <div><span>邮编</span><strong id="zipValue">-</strong></div>
               <div><span>国家</span><strong id="countryValue">-</strong></div>
             </div>
-          </div>
 
-          <div class="actions">
-            <button id="copyAddressBtn" type="button" disabled>复制地址</button>
-            <button id="copyJsonBtn" type="button" disabled>复制 JSON</button>
+            <div class="actions card-actions">
+              <button id="copyAddressBtn" type="button" disabled>
+                复制地址
+              </button>
+              <button id="copyJsonBtn" type="button" disabled>复制 JSON</button>
+            </div>
           </div>
         </section>
 
