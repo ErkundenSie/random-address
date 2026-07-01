@@ -1067,12 +1067,25 @@ function pickStateCode() {
   return getRandom(getCandidateStates());
 }
 
+function getFallbackAddressPoint(stateCode, city) {
+  const boxes = NOMINATIM_STATE_BOUNDS[stateCode] || NOMINATIM_STATE_BOUNDS.OR;
+  const cityName = String(city || "").toLowerCase();
+  const box =
+    boxes.find((item) => String(item.name || "").toLowerCase() === cityName) ||
+    boxes[0];
+  return {
+    lat: Number(randomBetween(box.lat[0], box.lat[1]).toFixed(7)),
+    lng: Number(randomBetween(box.lng[0], box.lng[1]).toFixed(7)),
+  };
+}
+
 function generateFallbackIdentity(forcedStateCode = "") {
   const stateCode = forcedStateCode || pickStateCode();
   const list = RESIDENTIAL_DB[stateCode] || RESIDENTIAL_DB.OR;
   const targetAddress = getRandom(list);
   const firstName = getRandom(NAMES_DB.first);
   const lastName = getRandom(NAMES_DB.last);
+  const point = getFallbackAddressPoint(stateCode, targetAddress.city);
 
   return {
     name: `${firstName} ${lastName}`,
@@ -1084,6 +1097,8 @@ function generateFallbackIdentity(forcedStateCode = "") {
     country: "US",
     stateName: getStateNameByCode(stateCode),
     areaCode: targetAddress.area,
+    lat: point.lat,
+    lng: point.lng,
     zipStateVerified: isZipInState(targetAddress.zip, stateCode),
     confidence: "low",
     confidenceLabel: "低",
@@ -1519,6 +1534,23 @@ function getMapVerifyUrl(identity) {
   return "";
 }
 
+function getOpenStreetMapEmbedUrl(identity) {
+  if (!identity) return "";
+  const lat = Number(identity.lat);
+  const lng = Number(identity.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+  const delta = 0.0018;
+  const bbox = [lng - delta, lat - delta, lng + delta, lat + delta]
+    .map((value) => value.toFixed(6))
+    .join(",");
+  const params = new URLSearchParams({
+    bbox,
+    layer: "mapnik",
+    marker: `${lat.toFixed(6)},${lng.toFixed(6)}`,
+  });
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+}
+
 function updateSourceButton(source) {
   const button = $("openSourceBtn");
   if (!button) return;
@@ -1534,6 +1566,25 @@ function updateMapButton(identity) {
   const url = getMapVerifyUrl(identity);
   button.disabled = !url;
   button.dataset.url = url;
+}
+
+function updateMapPreview(identity) {
+  const frame = $("mapFrame");
+  const placeholder = $("mapPlaceholder");
+  const status = $("mapStatusBadge");
+  const button = $("openMapPreviewBtn");
+  if (!frame || !placeholder || !status || !button) return;
+
+  const embedUrl = getOpenStreetMapEmbedUrl(identity);
+  const mapUrl = getMapVerifyUrl(identity);
+  const hasMap = Boolean(embedUrl);
+
+  frame.src = hasMap ? embedUrl : "about:blank";
+  frame.classList.toggle("is-ready", hasMap);
+  placeholder.classList.toggle("is-hidden", hasMap);
+  status.textContent = hasMap ? getMapVerificationText(identity) : "等待生成";
+  button.disabled = !mapUrl;
+  button.dataset.url = mapUrl;
 }
 
 function formatFullAddress(id) {
@@ -1659,6 +1710,7 @@ function renderIdentity(id) {
   setText("sourceBadge", getSourceLabel(id.source));
   updateSourceButton(id.source);
   updateMapButton(id);
+  updateMapPreview(id);
   setText("fullAddress", formatFullAddress(id));
   setText("nameValue", id.name);
   setText("emailValue", id.email);
@@ -1769,6 +1821,11 @@ function init() {
   $("generateBtn").addEventListener("click", handleGenerate);
   $("openMapBtn").addEventListener("click", () => {
     const url = $("openMapBtn").dataset.url;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  });
+  $("openMapPreviewBtn").addEventListener("click", () => {
+    const url = $("openMapPreviewBtn").dataset.url;
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
   });

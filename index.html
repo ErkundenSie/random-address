@@ -11,13 +11,16 @@
   <body>
     <main class="app-shell">
       <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Address Generator</p>
-          <h1>随机地址生成器</h1>
-          <p class="subtitle">快速生成、复制美国及全球地址与联系信息。</p>
+        <div class="hero-brand">
+          <div class="hero-mark" aria-hidden="true">AG</div>
+          <div class="hero-copy">
+            <p class="eyebrow">Address Generator</p>
+            <h1>随机地址生成器</h1>
+            <p class="subtitle">快速生成、复制美国及全球地址与联系信息。</p>
+          </div>
         </div>
         <div class="hero-actions">
-          <div class="hero-tip">支持本地源、接口源和代理转发</div>
+          <div class="hero-tip">本地源 · 接口源 · 代理转发</div>
           <button id="generateBtn" class="primary-btn" type="button">
             生成随机地址
           </button>
@@ -27,12 +30,15 @@
       <section class="panel controls" aria-label="生成设置">
         <details id="settingsDetails" class="settings-shell">
           <summary class="settings-summary">
-            <div class="settings-summary-copy">
-              <p class="eyebrow">Generator Settings</p>
-              <h2>生成设置</h2>
-              <p class="section-note compact-note">
-                结果优先展示，设置默认收起；需要时再展开调整。
-              </p>
+            <div class="settings-summary-left">
+              <span class="settings-mark" aria-hidden="true">SET</span>
+              <div class="settings-summary-copy">
+                <p class="eyebrow">Generator Settings</p>
+                <h2>生成设置</h2>
+                <p class="section-note compact-note">
+                  结果优先展示，设置默认收起；需要时再展开调整。
+                </p>
+              </div>
             </div>
             <div class="settings-summary-meta">
               <span id="settingsSourceBadge" class="settings-mini-badge"></span>
@@ -187,6 +193,12 @@
                 <button id="openSourceBtn" type="button" disabled>
                   打开源站
                 </button>
+                <button id="copyAddressBtn" type="button" disabled>
+                  复制地址
+                </button>
+                <button id="copyJsonBtn" type="button" disabled>
+                  复制 JSON
+                </button>
               </div>
             </div>
 
@@ -268,12 +280,7 @@
               </div>
             </div>
 
-            <div class="actions card-actions">
-              <button id="copyAddressBtn" type="button" disabled>
-                复制地址
-              </button>
-              <button id="copyJsonBtn" type="button" disabled>复制 JSON</button>
-            </div>
+            <div class="actions card-actions" aria-hidden="true"></div>
           </div>
         </section>
 
@@ -292,6 +299,32 @@
           </section>
         </aside>
       </div>
+
+      <section class="panel map-panel" aria-label="地图预览">
+        <div class="map-header">
+          <div>
+            <p class="eyebrow">Map Preview</p>
+            <h2>地图预览</h2>
+          </div>
+          <div class="map-meta">
+            <span id="mapStatusBadge">等待生成</span>
+            <button id="openMapPreviewBtn" type="button" disabled>
+              打开地图
+            </button>
+          </div>
+        </div>
+        <div class="map-frame-shell">
+          <iframe
+            id="mapFrame"
+            title="地址地图预览"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          ></iframe>
+          <div id="mapPlaceholder" class="map-placeholder">
+            生成地址后在这里显示地图位置
+          </div>
+        </div>
+      </section>
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </main>
