@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ea580c" />
     <title>随机地址生成器</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -12,7 +14,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Address Generator</p>
           <h1>随机地址生成器</h1>
-          <p class="subtitle">快速生成、复制美国地址与联系信息。</p>
+          <p class="subtitle">快速生成、复制美国及全球地址与联系信息。</p>
         </div>
         <div class="hero-actions">
           <div class="hero-tip">支持本地源、接口源和代理转发</div>
@@ -49,10 +51,16 @@
                   <option value="original">原始本地逻辑</option>
                   <option value="fake">fakeaddressgenerator</option>
                   <option value="nominatim">Nominatim Reverse</option>
+                  <option value="global">全球地图源</option>
                 </select>
               </label>
 
-              <label class="field-card">
+              <label id="countryWrap" class="field-card is-hidden">
+                <span class="field-label">国家 / 地区</span>
+                <select id="countrySelect"></select>
+              </label>
+
+              <label id="stateModeWrap" class="field-card">
                 <span class="field-label">州范围</span>
                 <select id="stateModeSelect">
                   <option value="tax-free">
@@ -162,7 +170,14 @@
             <div class="address-overview">
               <div class="address-copy">
                 <p class="field-label">完整地址</p>
-                <div class="address-line" id="fullAddress">
+                <div
+                  class="address-line copyable-field"
+                  id="fullAddress"
+                  data-copy-key="fullAddress"
+                  role="button"
+                  tabindex="0"
+                  title="点击复制完整地址"
+                >
                   点击“生成随机地址”开始。
                 </div>
               </div>
@@ -176,14 +191,81 @@
             </div>
 
             <div class="grid">
-              <div><span>姓名</span><strong id="nameValue">-</strong></div>
-              <div><span>邮箱</span><strong id="emailValue">-</strong></div>
-              <div><span>电话</span><strong id="phoneValue">-</strong></div>
-              <div><span>地址 1</span><strong id="line1Value">-</strong></div>
-              <div><span>城市</span><strong id="cityValue">-</strong></div>
-              <div><span>州</span><strong id="stateValue">-</strong></div>
-              <div><span>邮编</span><strong id="zipValue">-</strong></div>
-              <div><span>国家</span><strong id="countryValue">-</strong></div>
+              <div
+                class="copyable-field"
+                data-copy-key="name"
+                role="button"
+                tabindex="0"
+                title="点击复制姓名"
+              >
+                <span>姓名</span><strong id="nameValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="email"
+                role="button"
+                tabindex="0"
+                title="点击复制邮箱"
+              >
+                <span>邮箱</span><strong id="emailValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="phone"
+                role="button"
+                tabindex="0"
+                title="点击复制电话"
+              >
+                <span>电话</span><strong id="phoneValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="line1"
+                role="button"
+                tabindex="0"
+                title="点击复制地址 1"
+              >
+                <span>地址 1</span><strong id="line1Value">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="city"
+                role="button"
+                tabindex="0"
+                title="点击复制城市"
+              >
+                <span>城市</span><strong id="cityValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="state"
+                role="button"
+                tabindex="0"
+                title="点击复制州/地区"
+              >
+                <span>州/地区</span><strong id="stateValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="zip"
+                role="button"
+                tabindex="0"
+                title="点击复制邮编"
+              >
+                <span>邮编</span><strong id="zipValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="confidence"
+                role="button"
+                tabindex="0"
+                title="点击复制可信度"
+              >
+                <span>可信度</span><strong id="confidenceValue">-</strong>
+              </div>
+              <div class="verify-field" title="Nominatim / OSM 反查核验详情">
+                <span>地图核验</span><strong id="mapVerifyValue">-</strong>
+              </div>
             </div>
 
             <div class="actions card-actions">

@@ -4,6 +4,7 @@ const ADDRESS_SOURCE = {
   ORIGINAL: "original",
   FAKE: "fake",
   NOMINATIM: "nominatim",
+  GLOBAL: "global",
 };
 
 const SETTINGS_KEY = "random_address_generator_settings_v2";
@@ -18,10 +19,41 @@ const SOURCE_SITE_URLS = {
   fake: "https://fakeaddressgenerator.click/zh",
   fakeaddressgenerator: "https://fakeaddressgenerator.click/zh",
   nominatim: "https://nominatim.openstreetmap.org/ui/reverse.html",
+  global: "https://github.com/YeShengDe/AddressGeneratorFe",
 };
 const LOCAL_SERVER_HINT =
   "接口源需要通过本地服务打开：运行 start-local.bat，或在此目录执行 node server.js 后访问 http://127.0.0.1:8787";
 const TAX_FREE_STATES = ["OR", "DE", "NH", "MT", "AK"];
+const GLOBAL_COUNTRIES = [
+  { code: "US", name: "United States" },
+  { code: "CA", name: "Canada" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "AU", name: "Australia" },
+  { code: "DE", name: "Germany" },
+  { code: "FR", name: "France" },
+  { code: "JP", name: "Japan" },
+  { code: "KR", name: "South Korea" },
+  { code: "SG", name: "Singapore" },
+  { code: "CN", name: "China" },
+];
+const USPS_ZIP_PREFIX_RANGES = {
+  OR: [[970, 979]],
+  DE: [[197, 199]],
+  NH: [[30, 38]],
+  MT: [[590, 599]],
+  AK: [[995, 999]],
+  CA: [[900, 961]],
+  NY: [[100, 149]],
+  TX: [
+    [733, 733],
+    [750, 799],
+    [885, 885],
+  ],
+  FL: [[320, 349]],
+  WA: [[980, 994]],
+  IL: [[600, 629]],
+  PA: [[150, 196]],
+};
 
 const RESIDENTIAL_DB = {
   OR: [
@@ -637,18 +669,20 @@ function loadSettings() {
       source: parsed.source || ADDRESS_SOURCE.LOCAL,
       stateMode: parsed.stateMode || "tax-free",
       stateCode: parsed.stateCode || "OR",
+      countryCode: parsed.countryCode || "US",
       fallback: parsed.fallback !== false,
       proxyType: parsed.proxyType || "direct",
       proxyHost: parsed.proxyHost || "127.0.0.1",
       proxyPort: parsed.proxyPort || "7890",
       proxyUsername: parsed.proxyUsername || "",
-      proxyPassword: parsed.proxyPassword || "",
+      proxyPassword: "",
     };
   } catch (error) {
     return {
       source: ADDRESS_SOURCE.LOCAL,
       stateMode: "tax-free",
       stateCode: "OR",
+      countryCode: "US",
       fallback: true,
       proxyType: "direct",
       proxyHost: "127.0.0.1",
@@ -715,6 +749,9 @@ function normalizeRealAddressIdentity(data, expectedStateCode = "") {
     );
   }
 
+  const zip = normalizeZip5(raw.zip);
+  const zipStateVerified = isZipInState(zip, stateCode);
+
   return {
     name: fullName,
     email: `${emailName || "user"}.${Math.floor(Math.random() * 9999)}@gmail.com`,
@@ -723,9 +760,15 @@ function normalizeRealAddressIdentity(data, expectedStateCode = "") {
     line2: "",
     city: toTitleCaseText(raw.city),
     state: stateCode,
-    zip: normalizeZip5(raw.zip),
+    zip,
     country: raw.countryCode || raw.country || "US",
     stateName,
+    zipStateVerified,
+    confidence: zipStateVerified ? "medium" : "low",
+    confidenceLabel: zipStateVerified ? "中" : "低",
+    confidenceReason: zipStateVerified
+      ? "第三方接口返回字段完整，且 ZIP 与州一致"
+      : "第三方接口返回字段完整，但 ZIP/州一致性未通过本地校验",
     source: "zhenshidizhi",
   };
 }
@@ -752,6 +795,9 @@ function normalizeLocalSourceIdentity(raw, expectedStateCode = "") {
     .replace(/[^a-z0-9]+/gi, ".")
     .replace(/^\.+|\.+$/g, "")
     .toLowerCase();
+  const zip = normalizeZip5(raw.zip);
+  const zipStateVerified =
+    raw.zipStateVerified === true || isZipInState(zip, resultState);
 
   return {
     name: safeName,
@@ -763,13 +809,66 @@ function normalizeLocalSourceIdentity(raw, expectedStateCode = "") {
     line2: String(raw.line2 || ""),
     city: toTitleCaseText(raw.city),
     state: resultState,
-    zip: normalizeZip5(raw.zip),
+    zip,
     country: String(raw.country || "US").toUpperCase(),
     areaCode: raw.areaCode,
     lat: raw.lat,
     lng: raw.lng,
     stateName: raw.stateName || getStateNameByCode(resultState),
+    zipStateVerified,
+    zipSource: raw.zipSource || "unknown",
+    confidence: raw.confidence || (zipStateVerified ? "high" : "medium"),
+    confidenceLabel: raw.confidenceLabel || (zipStateVerified ? "高" : "中"),
+    confidenceReason:
+      raw.confidenceReason ||
+      (zipStateVerified
+        ? "本地源返回字段完整，且 ZIP 与州一致"
+        : "本地源返回字段完整，但 ZIP/州一致性未通过本地校验"),
+    mapVerification: raw.mapVerification || null,
     source: ADDRESS_SOURCE.LOCAL,
+  };
+}
+
+function normalizeGlobalSourceIdentity(raw, expectedCountryCode = "") {
+  if (!raw || typeof raw !== "object") throw new Error("全球地图源返回为空");
+  if (raw.error) throw new Error(raw.error);
+  if (!raw.name || !raw.line1 || !raw.city || !raw.country) {
+    throw new Error("全球地图源返回字段不完整");
+  }
+
+  const resultCountryCode = String(raw.countryCode || "")
+    .trim()
+    .toUpperCase();
+  const expected = String(expectedCountryCode || "")
+    .trim()
+    .toUpperCase();
+  if (expected && resultCountryCode && resultCountryCode !== expected) {
+    throw new Error(
+      `全球地图源返回国家不匹配: expected ${expected}, got ${resultCountryCode}`,
+    );
+  }
+
+  return {
+    name: String(raw.name).trim(),
+    email: String(raw.email || "").trim(),
+    phone: String(raw.phone || "").trim(),
+    line1: toTitleCaseText(raw.line1),
+    line2: String(raw.line2 || ""),
+    city: toTitleCaseText(raw.city),
+    state: toTitleCaseText(raw.state),
+    zip: String(raw.zip || "").trim(),
+    country: raw.country || getGlobalCountryName(resultCountryCode || expected),
+    countryCode: resultCountryCode || expected,
+    lat: raw.lat,
+    lng: raw.lng,
+    stateName: raw.stateName || raw.state || "",
+    zipStateVerified: raw.zipStateVerified === true,
+    confidence: raw.confidence || "medium",
+    confidenceLabel: raw.confidenceLabel || "中",
+    confidenceReason:
+      raw.confidenceReason || "全球地图源返回街道级地址，并通过基础地图校验",
+    mapVerification: raw.mapVerification || null,
+    source: ADDRESS_SOURCE.GLOBAL,
   };
 }
 
@@ -780,12 +879,12 @@ function saveSettings() {
       source: $("sourceSelect").value,
       stateMode: $("stateModeSelect").value,
       stateCode: $("stateSelect").value,
+      countryCode: $("countrySelect").value,
       fallback: $("fallbackCheck").checked,
       proxyType: $("proxyTypeSelect").value,
       proxyHost: $("proxyHostInput").value,
       proxyPort: $("proxyPortInput").value,
       proxyUsername: $("proxyUsernameInput").value,
-      proxyPassword: $("proxyPasswordInput").value,
     }),
   );
 }
@@ -853,6 +952,9 @@ function updateProxyVisibility() {
 }
 
 function getStateModeLabel() {
+  if ($("sourceSelect").value === ADDRESS_SOURCE.GLOBAL) {
+    return getGlobalCountryName($("countrySelect").value);
+  }
   const mode = $("stateModeSelect").value;
   if (mode === "specific") return `指定州 · ${$("stateSelect").value || "OR"}`;
   if (mode === "mixed") return "混合州";
@@ -892,9 +994,27 @@ function getStateNameByCode(stateCode) {
     : code;
 }
 
+function getGlobalCountryName(countryCode) {
+  const code = String(countryCode || "US").toUpperCase();
+  return (
+    GLOBAL_COUNTRIES.find((country) => country.code === code)?.name || code
+  );
+}
+
 function normalizeZip5(zip, fallback = "97204") {
   const match = String(zip || "").match(/\d{5}/);
   return match ? match[0] : fallback;
+}
+
+function isZipInState(zip, stateCode) {
+  const match = String(zip || "").match(/\d{5}/);
+  if (!match) return false;
+
+  const ranges = USPS_ZIP_PREFIX_RANGES[String(stateCode || "").toUpperCase()];
+  if (!ranges) return false;
+
+  const prefix = Number(match[0].slice(0, 3));
+  return ranges.some(([min, max]) => prefix >= min && prefix <= max);
 }
 
 function normalizeAreaCode(areaCode, fallback = "503") {
@@ -964,6 +1084,10 @@ function generateFallbackIdentity(forcedStateCode = "") {
     country: "US",
     stateName: getStateNameByCode(stateCode),
     areaCode: targetAddress.area,
+    zipStateVerified: isZipInState(targetAddress.zip, stateCode),
+    confidence: "low",
+    confidenceLabel: "低",
+    confidenceReason: "备用本地生成，地址字段来自内置样本和随机拼接",
     source: "original",
   };
 }
@@ -999,6 +1123,11 @@ function normalizeApiIdentity(raw, expectedStateCode = "") {
     .replace(/[^a-z0-9]+/gi, ".")
     .replace(/^\.+|\.+$/g, "")
     .toLowerCase();
+  const zip = normalizeZip5(
+    raw.zip,
+    getRandom(RESIDENTIAL_DB[resultState] || RESIDENTIAL_DB.OR).zip,
+  );
+  const zipStateVerified = isZipInState(zip, resultState);
 
   return {
     name: safeName,
@@ -1008,14 +1137,17 @@ function normalizeApiIdentity(raw, expectedStateCode = "") {
     line2: "",
     city: toTitleCaseText(raw.city),
     state: resultState,
-    zip: normalizeZip5(
-      raw.zip,
-      getRandom(RESIDENTIAL_DB[resultState] || RESIDENTIAL_DB.OR).zip,
-    ),
+    zip,
     country: "US",
     area: raw.area,
     areaCode: raw.areaCode,
     stateName: raw.stateName || getStateNameByCode(resultState),
+    zipStateVerified,
+    confidence: zipStateVerified ? "medium" : "low",
+    confidenceLabel: zipStateVerified ? "中" : "低",
+    confidenceReason: zipStateVerified
+      ? "第三方地址源返回字段完整，且 ZIP 与州一致"
+      : "第三方地址源返回字段完整，但 ZIP/州一致性未通过本地校验",
     source: "fakeaddressgenerator",
   };
 }
@@ -1092,6 +1224,17 @@ async function fetchIdentityFromLocalSource() {
     8500,
   );
   return normalizeLocalSourceIdentity(data, stateCode);
+}
+
+async function fetchIdentityFromGlobalSource() {
+  const countryCode = String($("countrySelect").value || "US").toUpperCase();
+  const params = new URLSearchParams({ country: countryCode });
+  const data = await fetchWithTimeout(
+    getLocalApiUrl(`/api/global-address?${params.toString()}`),
+    buildLocalApiOptions({ headers: { accept: "application/json" } }),
+    12000,
+  );
+  return normalizeGlobalSourceIdentity(data, countryCode);
 }
 
 function randomBetween(min, max) {
@@ -1174,9 +1317,9 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
   ]);
   if (!road) throw new Error("Nominatim 缺少街道字段");
 
+  const rawHouseNumber = getNominatimAddressPart(address, ["house_number"]);
   const houseNumber =
-    getNominatimAddressPart(address, ["house_number"]) ||
-    String(Math.floor(Math.random() * 8999) + 100);
+    rawHouseNumber || String(Math.floor(Math.random() * 8999) + 100);
   const city =
     toTitleCaseText(
       getNominatimAddressPart(address, [
@@ -1191,10 +1334,24 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
     ) ||
     point?.cityHint ||
     "Portland";
-  const zip = normalizeZip5(
-    address.postcode,
-    getRandom(RESIDENTIAL_DB[finalState] || RESIDENTIAL_DB.OR).zip,
-  );
+  const rawZip = normalizeZip5(address.postcode, "");
+  if (rawZip && !isZipInState(rawZip, finalState)) {
+    throw new Error(`Nominatim 返回 ZIP 与州不匹配: ${rawZip} / ${finalState}`);
+  }
+  const zip =
+    rawZip || getRandom(RESIDENTIAL_DB[finalState] || RESIDENTIAL_DB.OR).zip;
+  const zipStateVerified = isZipInState(zip, finalState);
+  if (!zipStateVerified) {
+    throw new Error(
+      `Nominatim ZIP 无法通过州一致性校验: ${zip} / ${finalState}`,
+    );
+  }
+  const confidence = rawHouseNumber && rawZip ? "high" : "medium";
+  const confidenceLabel = rawHouseNumber && rawZip ? "高" : "中";
+  const confidenceReason =
+    rawHouseNumber && rawZip
+      ? "地图反查含门牌、街道、城市，且 ZIP 与州一致"
+      : "地图反查含街道和城市，部分字段使用备用值且 ZIP 与州一致";
   const firstName = getRandom(NAMES_DB.first);
   const lastName = getRandom(NAMES_DB.last);
   const areaCode =
@@ -1215,6 +1372,11 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
     lat: point?.lat ?? raw.lat,
     lng: point?.lng ?? raw.lon,
     stateName: getStateNameByCode(finalState),
+    zipStateVerified,
+    zipSource: rawZip ? "nominatim" : "fallback",
+    confidence,
+    confidenceLabel,
+    confidenceReason,
     source: "nominatim",
   };
 }
@@ -1243,7 +1405,7 @@ async function fetchIdentityFromNominatim() {
   const stateCode = pickNominatimStateCode();
   let lastError = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 6; attempt++) {
     const point = pickNominatimPoint(stateCode);
     try {
       const data = await fetchWithTimeout(
@@ -1274,6 +1436,8 @@ async function generateIdentity() {
       return await fetchIdentityFromFakeAddressApi();
     if (source === ADDRESS_SOURCE.NOMINATIM)
       return await fetchIdentityFromNominatim();
+    if (source === ADDRESS_SOURCE.GLOBAL)
+      return await fetchIdentityFromGlobalSource();
     return generateFallbackIdentity();
   } catch (error) {
     if (!$("fallbackCheck").checked) throw error;
@@ -1306,6 +1470,8 @@ function getSourceLabel(source) {
     return "fakeaddressgenerator";
   if (source === ADDRESS_SOURCE.NOMINATIM || raw.startsWith("nominatim"))
     return "Nominatim Reverse";
+  if (source === ADDRESS_SOURCE.GLOBAL || raw.startsWith("global"))
+    return "全球地图源";
   return String(source || "未知来源");
 }
 
@@ -1333,15 +1499,24 @@ function getSourceSiteUrl(source) {
   if (raw.startsWith("nominatim")) {
     return SOURCE_SITE_URLS.nominatim;
   }
+  if (raw.startsWith("global")) {
+    return SOURCE_SITE_URLS.global;
+  }
   return "";
 }
 
 function getMapVerifyUrl(identity) {
   if (!identity) return "";
   const query = formatFullAddress(identity);
-  return query
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
-    : "";
+  if (query) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+  const lat = Number(identity.lat);
+  const lng = Number(identity.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  return "";
 }
 
 function updateSourceButton(source) {
@@ -1362,27 +1537,121 @@ function updateMapButton(identity) {
 }
 
 function formatFullAddress(id) {
-  return [id.line1, id.line2, id.city, id.state, id.zip, id.country]
+  if (isEastAsianCountry(id.countryCode)) {
+    return [
+      getCountryDisplayName(id.country),
+      id.state,
+      id.city,
+      id.line1,
+      id.zip,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  const cityStateZip = formatCityStateZip(id);
+  return [id.line1, id.line2, cityStateZip, getCountryDisplayName(id.country)]
     .filter(Boolean)
     .join(", ");
 }
 
+function isEastAsianCountry(countryCode) {
+  return ["CN", "JP", "KR"].includes(String(countryCode || "").toUpperCase());
+}
+
+function formatCityStateZip(id) {
+  return [id.city, [id.state, id.zip].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getCountryDisplayName(country) {
+  const value = String(country || "")
+    .trim()
+    .toUpperCase();
+  return value === "US" || value === "USA" ? "United States" : country;
+}
+
 function toCopyText(id) {
+  if (isEastAsianCountry(id.countryCode)) {
+    return [id.name, id.email, id.phone, formatFullAddress(id)]
+      .filter(Boolean)
+      .join("\n");
+  }
   return [
     id.name,
     id.email,
     id.phone,
     id.line1,
     id.line2,
-    `${id.city}, ${id.state} ${id.zip}`,
-    id.country,
+    formatCityStateZip(id),
+    getCountryDisplayName(id.country),
   ]
     .filter(Boolean)
     .join("\n");
 }
 
+function getFieldCopyValue(key, id) {
+  if (!id) return "";
+  const values = {
+    fullAddress: formatFullAddress(id),
+    name: id.name,
+    email: id.email,
+    phone: id.phone,
+    line1: id.line1,
+    city: id.city,
+    state: id.state,
+    zip: id.zip,
+    confidence: getConfidenceText(id),
+  };
+  return String(values[key] || "").trim();
+}
+
+async function copyFieldValue(key) {
+  const value = getFieldCopyValue(key, state.currentIdentity);
+  if (!value || value === "-") return;
+  await copyText(value);
+}
+
 function setText(id, value) {
   $(id).textContent = value || "-";
+}
+
+function getConfidenceText(id) {
+  if (!id) return "-";
+  const label = id.confidenceLabel || "未评估";
+  if (id.source === ADDRESS_SOURCE.GLOBAL) {
+    return `${label} · 街道级地图校验`;
+  }
+  const zipText = id.zipStateVerified ? "ZIP/州一致" : "ZIP/州未验证";
+  return `${label} · ${zipText}`;
+}
+
+function getMapVerificationText(id) {
+  if (!id) return "-";
+  const verification = id.mapVerification || {};
+  const checks = [];
+  if (verification.streetLevel) checks.push("街道级");
+  if (verification.waterFiltered) checks.push("非水域");
+  if (verification.coarseFiltered) checks.push("非粗粒度");
+  if (Number.isFinite(Number(verification.distanceMeters))) {
+    checks.push(`偏移 ${Number(verification.distanceMeters)}m`);
+  }
+  if (verification.snapped) checks.push("已吸附到反查坐标");
+  const lat = Number(id.lat);
+  const lng = Number(id.lng);
+  const location =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+      : "";
+  return [checks.length ? checks.join(" · ") : id.confidenceReason, location]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function setConfidence(id) {
+  const element = $("confidenceValue");
+  element.textContent = getConfidenceText(id);
+  element.title = id?.confidenceReason || "";
 }
 
 function renderIdentity(id) {
@@ -1401,7 +1670,8 @@ function renderIdentity(id) {
     `${id.state}${id.stateName ? ` / ${id.stateName}` : ""}`,
   );
   setText("zipValue", id.zip);
-  setText("countryValue", id.country);
+  setText("mapVerifyValue", getMapVerificationText(id));
+  setConfidence(id);
   $("copyAddressBtn").disabled = false;
   $("copyJsonBtn").disabled = false;
 }
@@ -1457,20 +1727,35 @@ function populateStates() {
   });
 }
 
+function populateCountries() {
+  const select = $("countrySelect");
+  GLOBAL_COUNTRIES.forEach((country) => {
+    const option = document.createElement("option");
+    option.value = country.code;
+    option.textContent = `${country.code} - ${country.name}`;
+    select.appendChild(option);
+  });
+}
+
 function updateStateVisibility() {
+  const isGlobal = $("sourceSelect").value === ADDRESS_SOURCE.GLOBAL;
+  $("countryWrap").classList.toggle("is-hidden", !isGlobal);
+  $("stateModeWrap").classList.toggle("is-hidden", isGlobal);
   $("stateWrap").classList.toggle(
     "is-hidden",
-    $("stateModeSelect").value !== "specific",
+    isGlobal || $("stateModeSelect").value !== "specific",
   );
 }
 
 function init() {
   state.history = loadHistory();
   populateStates();
+  populateCountries();
   const settings = loadSettings();
   $("sourceSelect").value = settings.source;
   $("stateModeSelect").value = settings.stateMode;
   $("stateSelect").value = settings.stateCode;
+  $("countrySelect").value = settings.countryCode;
   $("fallbackCheck").checked = settings.fallback;
   $("proxyTypeSelect").value = settings.proxyType;
   $("proxyHostInput").value = settings.proxyHost;
@@ -1504,8 +1789,21 @@ function init() {
     if (state.currentIdentity)
       copyText(JSON.stringify(state.currentIdentity, null, 2));
   });
+  document
+    .querySelectorAll(".copyable-field[data-copy-key]")
+    .forEach((field) => {
+      field.addEventListener("click", () =>
+        copyFieldValue(field.dataset.copyKey),
+      );
+      field.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        copyFieldValue(field.dataset.copyKey);
+      });
+    });
   [
     "sourceSelect",
+    "countrySelect",
     "stateModeSelect",
     "stateSelect",
     "fallbackCheck",

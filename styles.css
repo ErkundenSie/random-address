@@ -294,10 +294,9 @@ h2 {
 
 .controls-main {
   display: grid;
-  grid-template-columns: minmax(240px, 1.25fr) minmax(240px, 1.15fr) minmax(
-      200px,
-      0.9fr
-    ) minmax(240px, 0.95fr);
+  grid-template-columns:
+    minmax(240px, 1.25fr) minmax(240px, 1.15fr) minmax(200px, 0.9fr)
+    minmax(240px, 0.95fr);
   gap: 8px;
   align-items: stretch;
 }
@@ -502,6 +501,22 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.copyable-field {
+  cursor: pointer;
+}
+
+.copyable-field:hover,
+.copyable-field:focus-visible {
+  border-color: rgba(249, 115, 22, 0.42);
+  box-shadow: 0 10px 20px rgba(234, 88, 12, 0.08);
+  outline: none;
+}
+
+.address-line.copyable-field:hover,
+.address-line.copyable-field:focus-visible {
+  color: var(--accent-strong);
+}
+
 .result-tools {
   display: flex;
   flex-wrap: wrap;
@@ -534,6 +549,11 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.7);
+}
+
+.grid > .verify-field {
+  grid-column: 1 / -1;
+  min-height: auto;
 }
 
 .grid span {

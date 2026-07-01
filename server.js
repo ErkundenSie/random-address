@@ -6,14 +6,170 @@ const { HttpProxyAgent } = require("http-proxy-agent");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 const { SocksProxyAgent } = require("socks-proxy-agent");
 
-const HOST = process.env.HOST || "0.0.0.0";
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = __dirname;
 const PROXY_CONFIG_HEADER = "x-proxy-config";
+const ALLOW_REMOTE_PROXY = process.env.ALLOW_REMOTE_PROXY === "1";
+const MAX_JSON_RESPONSE_BYTES = 1024 * 1024;
 const FAKE_ADDRESS_API_URL = "https://fakeaddressgenerator.click/api/generate";
 const NOMINATIM_REVERSE_API_URL = "https://nominatim.openstreetmap.org/reverse";
 const REAL_ADDRESS_API_URL =
   "https://www.zhenshidizhi.com/api/addresses/random?country=US&count=1";
+const GLOBAL_RANDOM_RADIUS_SCALES = [0.2, 0.35, 0.55, 0.8];
+const GLOBAL_ATTEMPTS_PER_RADIUS = 3;
+const MIN_STREET_LEVEL_PLACE_RANK = 26;
+const MAX_REVERSE_MATCH_DISTANCE_METERS = 350;
+const MAX_COORD_SNAP_DISTANCE_METERS = 1800;
+const GLOBAL_COUNTRIES = {
+  US: {
+    name: "United States",
+    language: "en",
+    phone: { dial: "1", groups: [3, 3, 4] },
+    centers: [
+      { name: "New York", lat: 40.7128, lng: -74.006, radiusKm: 12 },
+      { name: "Los Angeles", lat: 34.0522, lng: -118.2437, radiusKm: 14 },
+      { name: "Chicago", lat: 41.8781, lng: -87.6298, radiusKm: 10 },
+      { name: "Portland", lat: 45.5152, lng: -122.6784, radiusKm: 9 },
+    ],
+  },
+  CA: {
+    name: "Canada",
+    language: "en",
+    phone: { dial: "1", groups: [3, 3, 4] },
+    centers: [
+      { name: "Toronto", lat: 43.6532, lng: -79.3832, radiusKm: 12 },
+      { name: "Vancouver", lat: 49.2827, lng: -123.1207, radiusKm: 10 },
+      { name: "Montreal", lat: 45.5017, lng: -73.5673, radiusKm: 10 },
+    ],
+  },
+  GB: {
+    name: "United Kingdom",
+    language: "en",
+    phone: { dial: "44", groups: [4, 6] },
+    centers: [
+      { name: "London", lat: 51.5074, lng: -0.1278, radiusKm: 12 },
+      { name: "Manchester", lat: 53.4808, lng: -2.2426, radiusKm: 9 },
+      { name: "Birmingham", lat: 52.4862, lng: -1.8904, radiusKm: 9 },
+    ],
+  },
+  AU: {
+    name: "Australia",
+    language: "en",
+    phone: { dial: "61", groups: [4, 3, 3] },
+    centers: [
+      { name: "Sydney", lat: -33.8688, lng: 151.2093, radiusKm: 12 },
+      { name: "Melbourne", lat: -37.8136, lng: 144.9631, radiusKm: 12 },
+      { name: "Brisbane", lat: -27.4698, lng: 153.0251, radiusKm: 10 },
+    ],
+  },
+  DE: {
+    name: "Germany",
+    language: "de",
+    phone: { dial: "49", groups: [3, 3, 4] },
+    centers: [
+      { name: "Berlin", lat: 52.52, lng: 13.405, radiusKm: 10 },
+      { name: "Munich", lat: 48.1351, lng: 11.582, radiusKm: 9 },
+      { name: "Hamburg", lat: 53.5511, lng: 9.9937, radiusKm: 9 },
+    ],
+  },
+  FR: {
+    name: "France",
+    language: "fr",
+    phone: { dial: "33", groups: [1, 2, 2, 2, 2] },
+    centers: [
+      { name: "Paris", lat: 48.8566, lng: 2.3522, radiusKm: 10 },
+      { name: "Lyon", lat: 45.764, lng: 4.8357, radiusKm: 8 },
+      { name: "Marseille", lat: 43.2965, lng: 5.3698, radiusKm: 8 },
+    ],
+  },
+  JP: {
+    name: "Japan",
+    language: "ja",
+    phone: { dial: "81", groups: [2, 4, 4] },
+    centers: [
+      { name: "Tokyo", lat: 35.6762, lng: 139.6503, radiusKm: 10 },
+      { name: "Osaka", lat: 34.6937, lng: 135.5023, radiusKm: 8 },
+      { name: "Nagoya", lat: 35.1815, lng: 136.9066, radiusKm: 8 },
+    ],
+  },
+  KR: {
+    name: "South Korea",
+    language: "ko",
+    phone: { dial: "82", groups: [2, 4, 4] },
+    centers: [
+      { name: "Seoul", lat: 37.5665, lng: 126.978, radiusKm: 9 },
+      { name: "Busan", lat: 35.1796, lng: 129.0756, radiusKm: 8 },
+    ],
+  },
+  SG: {
+    name: "Singapore",
+    language: "en",
+    phone: { dial: "65", groups: [4, 4] },
+    centers: [{ name: "Singapore", lat: 1.3521, lng: 103.8198, radiusKm: 8 }],
+  },
+  CN: {
+    name: "China",
+    language: "zh-CN",
+    phone: { dial: "86", groups: [3, 4, 4] },
+    centers: [
+      { name: "Shanghai", lat: 31.2304, lng: 121.4737, radiusKm: 12 },
+      { name: "Beijing", lat: 39.9042, lng: 116.4074, radiusKm: 12 },
+      { name: "Guangzhou", lat: 23.1291, lng: 113.2644, radiusKm: 10 },
+    ],
+  },
+};
+const GLOBAL_NAME_DB = {
+  first: ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Chris", "Jamie"],
+  last: ["Smith", "Johnson", "Brown", "Lee", "Martin", "Garcia", "Wilson"],
+};
+const WATER_CATEGORIES = new Set(["waterway", "natural"]);
+const WATER_TYPES = new Set([
+  "bay",
+  "coastline",
+  "harbour",
+  "lake",
+  "ocean",
+  "river",
+  "sea",
+  "strait",
+  "water",
+  "wetland",
+]);
+const COARSE_TYPES = new Set([
+  "administrative",
+  "city",
+  "continent",
+  "country",
+  "county",
+  "district",
+  "hamlet",
+  "island",
+  "locality",
+  "municipality",
+  "neighbourhood",
+  "postcode",
+  "province",
+  "quarter",
+  "region",
+  "state",
+  "suburb",
+  "town",
+  "village",
+]);
+const LOCALITY_FIELDS = [
+  "borough",
+  "city",
+  "city_district",
+  "county",
+  "hamlet",
+  "municipality",
+  "neighbourhood",
+  "quarter",
+  "suburb",
+  "town",
+  "village",
+];
 const LOCAL_SOURCE_NAME_DB = {
   first: [
     "John",
@@ -60,6 +216,24 @@ const LOCAL_STATE_MAP = Object.fromEntries(
     code,
   ]),
 );
+const USPS_ZIP_PREFIX_RANGES = {
+  OR: [[970, 979]],
+  DE: [[197, 199]],
+  NH: [[30, 38]],
+  MT: [[590, 599]],
+  AK: [[995, 999]],
+  CA: [[900, 961]],
+  NY: [[100, 149]],
+  TX: [
+    [733, 733],
+    [750, 799],
+    [885, 885],
+  ],
+  FL: [[320, 349]],
+  WA: [[980, 994]],
+  IL: [[600, 629]],
+  PA: [[150, 196]],
+};
 const LOCAL_SOURCE_BOUNDS = {
   OR: [
     {
@@ -82,6 +256,20 @@ const LOCAL_SOURCE_BOUNDS = {
       lng: [-121.38, -121.23],
       area: "541",
       zip: "97701",
+    },
+    {
+      name: "Eugene",
+      lat: [44.02, 44.1],
+      lng: [-123.16, -123.02],
+      area: "541",
+      zip: "97401",
+    },
+    {
+      name: "Medford",
+      lat: [42.29, 42.36],
+      lng: [-122.92, -122.82],
+      area: "541",
+      zip: "97501",
     },
   ],
   DE: [
@@ -106,6 +294,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "302",
       zip: "19901",
     },
+    {
+      name: "Middletown",
+      lat: [39.42, 39.48],
+      lng: [-75.75, -75.66],
+      area: "302",
+      zip: "19709",
+    },
+    {
+      name: "Rehoboth Beach",
+      lat: [38.69, 38.74],
+      lng: [-75.12, -75.06],
+      area: "302",
+      zip: "19971",
+    },
   ],
   NH: [
     {
@@ -128,6 +330,20 @@ const LOCAL_SOURCE_BOUNDS = {
       lng: [-71.6, -71.48],
       area: "603",
       zip: "03301",
+    },
+    {
+      name: "Portsmouth",
+      lat: [43.04, 43.1],
+      lng: [-70.82, -70.72],
+      area: "603",
+      zip: "03801",
+    },
+    {
+      name: "Keene",
+      lat: [42.91, 42.96],
+      lng: [-72.34, -72.25],
+      area: "603",
+      zip: "03431",
     },
   ],
   MT: [
@@ -152,6 +368,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "406",
       zip: "59601",
     },
+    {
+      name: "Bozeman",
+      lat: [45.65, 45.72],
+      lng: [-111.12, -111.0],
+      area: "406",
+      zip: "59715",
+    },
+    {
+      name: "Great Falls",
+      lat: [47.47, 47.54],
+      lng: [-111.38, -111.24],
+      area: "406",
+      zip: "59401",
+    },
   ],
   AK: [
     {
@@ -174,6 +404,20 @@ const LOCAL_SOURCE_BOUNDS = {
       lng: [-147.85, -147.6],
       area: "907",
       zip: "99701",
+    },
+    {
+      name: "Wasilla",
+      lat: [61.55, 61.61],
+      lng: [-149.55, -149.35],
+      area: "907",
+      zip: "99654",
+    },
+    {
+      name: "Ketchikan",
+      lat: [55.32, 55.37],
+      lng: [-131.7, -131.62],
+      area: "907",
+      zip: "99901",
     },
   ],
   CA: [
@@ -198,6 +442,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "619",
       zip: "92101",
     },
+    {
+      name: "Sacramento",
+      lat: [38.54, 38.62],
+      lng: [-121.55, -121.43],
+      area: "916",
+      zip: "95814",
+    },
+    {
+      name: "San Jose",
+      lat: [37.3, 37.38],
+      lng: [-121.95, -121.82],
+      area: "408",
+      zip: "95112",
+    },
   ],
   NY: [
     {
@@ -213,6 +471,20 @@ const LOCAL_SOURCE_BOUNDS = {
       lng: [-74.02, -73.9],
       area: "718",
       zip: "11201",
+    },
+    {
+      name: "Buffalo",
+      lat: [42.86, 42.93],
+      lng: [-78.92, -78.8],
+      area: "716",
+      zip: "14202",
+    },
+    {
+      name: "Albany",
+      lat: [42.63, 42.69],
+      lng: [-73.82, -73.72],
+      area: "518",
+      zip: "12207",
     },
   ],
   TX: [
@@ -237,6 +509,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "512",
       zip: "78701",
     },
+    {
+      name: "San Antonio",
+      lat: [29.39, 29.47],
+      lng: [-98.55, -98.43],
+      area: "210",
+      zip: "78205",
+    },
+    {
+      name: "Fort Worth",
+      lat: [32.72, 32.79],
+      lng: [-97.38, -97.28],
+      area: "817",
+      zip: "76102",
+    },
   ],
   FL: [
     {
@@ -260,6 +546,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "813",
       zip: "33602",
     },
+    {
+      name: "Jacksonville",
+      lat: [30.29, 30.36],
+      lng: [-81.72, -81.6],
+      area: "904",
+      zip: "32202",
+    },
+    {
+      name: "Fort Lauderdale",
+      lat: [26.1, 26.16],
+      lng: [-80.18, -80.1],
+      area: "954",
+      zip: "33301",
+    },
   ],
   WA: [
     {
@@ -275,6 +575,20 @@ const LOCAL_SOURCE_BOUNDS = {
       lng: [-122.23, -122.15],
       area: "425",
       zip: "98004",
+    },
+    {
+      name: "Spokane",
+      lat: [47.63, 47.7],
+      lng: [-117.48, -117.35],
+      area: "509",
+      zip: "99201",
+    },
+    {
+      name: "Tacoma",
+      lat: [47.22, 47.28],
+      lng: [-122.5, -122.38],
+      area: "253",
+      zip: "98402",
     },
   ],
   IL: [
@@ -292,6 +606,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "847",
       zip: "60173",
     },
+    {
+      name: "Springfield",
+      lat: [39.76, 39.83],
+      lng: [-89.72, -89.6],
+      area: "217",
+      zip: "62701",
+    },
+    {
+      name: "Naperville",
+      lat: [41.73, 41.79],
+      lng: [-88.2, -88.1],
+      area: "630",
+      zip: "60540",
+    },
   ],
   PA: [
     {
@@ -308,6 +636,20 @@ const LOCAL_SOURCE_BOUNDS = {
       area: "412",
       zip: "15222",
     },
+    {
+      name: "Allentown",
+      lat: [40.57, 40.63],
+      lng: [-75.52, -75.42],
+      area: "610",
+      zip: "18101",
+    },
+    {
+      name: "Harrisburg",
+      lat: [40.24, 40.3],
+      lng: [-76.93, -76.82],
+      area: "717",
+      zip: "17101",
+    },
   ],
 };
 
@@ -315,6 +657,7 @@ const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
   ".json": "application/json; charset=utf-8",
 };
 const PROXY_AGENT_CACHE = new Map();
@@ -403,6 +746,11 @@ function getProxyConfigFromRequest(req) {
   const host = String(parsed?.host || "").trim();
   const port = Number(parsed?.port);
   if (!host) throw new Error("代理主机不能为空");
+  if (!ALLOW_REMOTE_PROXY && !isLoopbackProxyHost(host)) {
+    throw new Error(
+      "默认仅允许本机代理；如需远程代理，请设置 ALLOW_REMOTE_PROXY=1",
+    );
+  }
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("代理端口无效");
   }
@@ -414,6 +762,19 @@ function getProxyConfigFromRequest(req) {
     username: String(parsed?.username || ""),
     password: String(parsed?.password || ""),
   };
+}
+
+function isLoopbackProxyHost(host) {
+  const value = String(host || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  return (
+    value === "localhost" ||
+    value === "::1" ||
+    value === "0:0:0:0:0:0:0:1" ||
+    /^127(?:\.\d{1,3}){3}$/.test(value)
+  );
 }
 
 function buildProxyUrl(proxyConfig) {
@@ -468,11 +829,18 @@ function fetchJson(url, options = {}, timeoutMs = 9000, proxyConfig = null) {
       },
       (response) => {
         let text = "";
+        let responseTooLarge = false;
         response.setEncoding("utf8");
         response.on("data", (chunk) => {
+          if (responseTooLarge) return;
           text += chunk;
+          if (Buffer.byteLength(text, "utf8") > MAX_JSON_RESPONSE_BYTES) {
+            responseTooLarge = true;
+            request.destroy(new Error("接口响应过大"));
+          }
         });
         response.on("end", () => {
+          if (responseTooLarge) return;
           let data = null;
           try {
             data = text ? JSON.parse(text) : null;
@@ -517,6 +885,209 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
+function normalizeCountryCode(value) {
+  const code = String(value || "")
+    .trim()
+    .toUpperCase();
+  if (code === "UK") return "GB";
+  return GLOBAL_COUNTRIES[code] ? code : "US";
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(start, end) {
+  const earthRadiusMeters = 6371000;
+  const deltaLat = toRadians(end.lat - start.lat);
+  const deltaLng = toRadians(end.lng - start.lng);
+  const startLat = toRadians(start.lat);
+  const endLat = toRadians(end.lat);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pickGlobalPoint(countryCode, radiusScale = 0.35) {
+  const country = GLOBAL_COUNTRIES[countryCode] || GLOBAL_COUNTRIES.US;
+  const center = getRandom(country.centers);
+  const distanceKm = Math.sqrt(Math.random()) * center.radiusKm * radiusScale;
+  const bearing = Math.random() * Math.PI * 2;
+  const latDelta = (distanceKm * Math.cos(bearing)) / 111.32;
+  const lngDelta =
+    (distanceKm * Math.sin(bearing)) /
+    (111.32 * Math.max(Math.cos(toRadians(center.lat)), 0.2));
+  return {
+    countryCode,
+    countryName: country.name,
+    language: country.language,
+    cityHint: center.name,
+    lat: Number((center.lat + latDelta).toFixed(7)),
+    lng: Number((center.lng + lngDelta).toFixed(7)),
+  };
+}
+
+function isWaterLike(result) {
+  const category = String(result?.category || "").toLowerCase();
+  const type = String(result?.type || result?.addresstype || "").toLowerCase();
+  return WATER_CATEGORIES.has(category) && WATER_TYPES.has(type);
+}
+
+function isCoarseAreaResult(result) {
+  const type = String(result?.type || "").toLowerCase();
+  const addressType = String(result?.addresstype || "").toLowerCase();
+  return COARSE_TYPES.has(type) || COARSE_TYPES.has(addressType);
+}
+
+function hasLocalityContext(address) {
+  return (
+    LOCALITY_FIELDS.some((field) => String(address?.[field] || "").trim()) ||
+    String(address?.postcode || "").trim()
+  );
+}
+
+function hasStreetLevelAddress(address) {
+  return (
+    Boolean(getNominatimAddressPart(address, ["road"])) &&
+    hasLocalityContext(address)
+  );
+}
+
+function resolveValidatedGlobalPoint(requestedPoint, raw, expectedCountryCode) {
+  const address = raw?.address || {};
+  const responseCountryCode = String(address.country_code || "")
+    .trim()
+    .toUpperCase();
+  if (!responseCountryCode || responseCountryCode !== expectedCountryCode)
+    return null;
+  if (isWaterLike(raw) || isCoarseAreaResult(raw)) return null;
+  if (Number(raw.place_rank || 0) < MIN_STREET_LEVEL_PLACE_RANK) return null;
+  if (!hasStreetLevelAddress(address)) return null;
+
+  const reversePoint = { lat: Number(raw.lat), lng: Number(raw.lon) };
+  if (
+    !Number.isFinite(reversePoint.lat) ||
+    !Number.isFinite(reversePoint.lng)
+  ) {
+    return null;
+  }
+
+  const distanceMeters = getDistanceMeters(requestedPoint, reversePoint);
+  if (distanceMeters <= MAX_REVERSE_MATCH_DISTANCE_METERS) {
+    return {
+      ...requestedPoint,
+      mapVerification: {
+        streetLevel: true,
+        waterFiltered: true,
+        coarseFiltered: true,
+        distanceMeters: Math.round(distanceMeters),
+        snapped: false,
+      },
+    };
+  }
+  if (distanceMeters <= MAX_COORD_SNAP_DISTANCE_METERS) {
+    return {
+      ...requestedPoint,
+      lat: reversePoint.lat,
+      lng: reversePoint.lng,
+      mapVerification: {
+        streetLevel: true,
+        waterFiltered: true,
+        coarseFiltered: true,
+        distanceMeters: Math.round(distanceMeters),
+        snapped: true,
+      },
+    };
+  }
+  return null;
+}
+
+function buildGlobalReverseUrl(point) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(point.lat),
+    lon: String(point.lng),
+    zoom: "18",
+    addressdetails: "1",
+    "accept-language": point.language || "en",
+  });
+  return `${NOMINATIM_REVERSE_API_URL}?${params.toString()}`;
+}
+
+function makeGlobalPhone(countryCode) {
+  const phone =
+    GLOBAL_COUNTRIES[countryCode]?.phone || GLOBAL_COUNTRIES.US.phone;
+  const digits = phone.groups.map((length) =>
+    Array.from({ length }, () => Math.floor(Math.random() * 10)).join(""),
+  );
+  return `+${phone.dial} ${digits.join(" ")}`;
+}
+
+function normalizeGlobalIdentity(raw, countryCode, point) {
+  if (!raw || typeof raw !== "object") throw new Error("全球地图源返回为空");
+  if (raw.error) throw new Error(raw.error);
+
+  const address = raw.address || {};
+  const road = getNominatimAddressPart(address, [
+    "road",
+    "pedestrian",
+    "residential",
+    "footway",
+    "cycleway",
+    "path",
+  ]);
+  const houseNumber = getNominatimAddressPart(address, ["house_number"]);
+  const city = toTitleCaseText(
+    getNominatimAddressPart(address, LOCALITY_FIELDS) || point.cityHint,
+  );
+  const state = toTitleCaseText(
+    getNominatimAddressPart(address, ["state", "region", "province", "county"]),
+  );
+  const zip = String(address.postcode || "").trim();
+  const countryName =
+    toTitleCaseText(address.country) ||
+    GLOBAL_COUNTRIES[countryCode]?.name ||
+    countryCode;
+
+  if (!road || !city) throw new Error("全球地图源缺少街道或城市字段");
+
+  const firstName = getRandom(GLOBAL_NAME_DB.first);
+  const lastName = getRandom(GLOBAL_NAME_DB.last);
+  const fullName = `${firstName} ${lastName}`;
+  const emailName = fullName
+    .replace(/[^a-z0-9]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .toLowerCase();
+  const line1 = [houseNumber, toTitleCaseText(road)].filter(Boolean).join(" ");
+  const confidence = houseNumber && zip ? "high" : "medium";
+
+  return {
+    name: fullName,
+    email: `${emailName}.${Math.floor(Math.random() * 9999)}@gmail.com`,
+    phone: makeGlobalPhone(countryCode),
+    line1,
+    line2: "",
+    city,
+    state,
+    zip,
+    country: countryName,
+    countryCode,
+    lat: point.lat,
+    lng: point.lng,
+    stateName: state,
+    zipStateVerified: Boolean(zip),
+    confidence,
+    confidenceLabel: confidence === "high" ? "高" : "中",
+    confidenceReason:
+      confidence === "high"
+        ? "全球地图源反查为街道级地址，含门牌、城市和邮编，并通过水域/粗粒度/距离校验"
+        : "全球地图源反查为街道级地址，并通过水域/粗粒度/距离校验，部分字段可能缺少门牌或邮编",
+    mapVerification: point.mapVerification || null,
+    source: "global",
+  };
+}
+
 function normalizeStateCode(value) {
   const code = String(value || "")
     .trim()
@@ -552,6 +1123,17 @@ function toTitleCaseText(value) {
 function normalizeZip5(zip, fallback = "97204") {
   const match = String(zip || "").match(/\d{5}/);
   return match ? match[0] : fallback;
+}
+
+function isZipInState(zip, stateCode) {
+  const match = String(zip || "").match(/\d{5}/);
+  if (!match) return false;
+
+  const ranges = USPS_ZIP_PREFIX_RANGES[String(stateCode || "").toUpperCase()];
+  if (!ranges) return false;
+
+  const prefix = Number(match[0].slice(0, 3));
+  return ranges.some(([min, max]) => prefix >= min && prefix <= max);
 }
 
 function makeUsPhone(areaCode = "503") {
@@ -658,11 +1240,26 @@ function normalizeLocalIdentity(raw, expectedStateCode = "", point = null) {
       "county",
     ]),
   );
-  const zip = normalizeZip5(address.postcode, point?.zip || "97204");
+  const rawZip = normalizeZip5(address.postcode, "");
+  if (rawZip && !isZipInState(rawZip, finalState)) {
+    throw new Error(`本地源返回 ZIP 与州不匹配: ${rawZip} / ${finalState}`);
+  }
+  const zip = rawZip || point?.zip || "97204";
+  const zipStateVerified = isZipInState(zip, finalState);
 
   if (!road || !houseNumber || !city) {
     throw new Error("本地源缺少详细地址字段");
   }
+
+  if (!zipStateVerified) {
+    throw new Error(`本地源 ZIP 无法通过州一致性校验: ${zip} / ${finalState}`);
+  }
+
+  const confidence = rawZip ? "high" : "medium";
+  const confidenceLabel = rawZip ? "高" : "中";
+  const confidenceReason = rawZip
+    ? "地图反查含门牌、街道、城市，且通过水域/粗粒度/距离和 ZIP/州一致性校验"
+    : "地图反查含门牌、街道、城市，且通过水域/粗粒度/距离校验；ZIP 使用同城备用值且与州一致";
 
   const firstName = getRandom(LOCAL_SOURCE_NAME_DB.first);
   const lastName = getRandom(LOCAL_SOURCE_NAME_DB.last);
@@ -686,6 +1283,12 @@ function normalizeLocalIdentity(raw, expectedStateCode = "", point = null) {
     lng: point?.lng ?? raw.lon,
     areaCode: point?.areaCode || "503",
     stateName: LOCAL_STATE_NAMES[finalState] || finalState,
+    zipStateVerified,
+    zipSource: rawZip ? "nominatim" : "fallback",
+    confidence,
+    confidenceLabel,
+    confidenceReason,
+    mapVerification: point?.mapVerification || null,
     source: "local",
   };
 }
@@ -790,7 +1393,7 @@ async function handleLocalAddress(req, res) {
       requestedStateCode || getRandom(Object.keys(LOCAL_SOURCE_BOUNDS));
     let lastError = null;
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 6; attempt++) {
       const point = pickLocalPoint(stateCode);
       try {
         const data = await fetchJson(
@@ -809,7 +1412,17 @@ async function handleLocalAddress(req, res) {
           7500,
           proxyConfig,
         );
-        sendJson(res, 200, normalizeLocalIdentity(data, stateCode, point));
+        const resolvedPoint = resolveValidatedGlobalPoint(point, data, "US");
+        if (!resolvedPoint) {
+          lastError = new Error("本地源未通过街道级、水域/粗粒度或距离校验");
+          continue;
+        }
+
+        sendJson(
+          res,
+          200,
+          normalizeLocalIdentity(data, stateCode, resolvedPoint),
+        );
         return;
       } catch (error) {
         lastError = error;
@@ -817,6 +1430,71 @@ async function handleLocalAddress(req, res) {
     }
 
     throw lastError || new Error("本地源未返回可用地址");
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || String(error) });
+  }
+}
+
+async function handleGlobalAddress(req, res) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "Method Not Allowed" });
+    return;
+  }
+
+  try {
+    const proxyConfig = getProxyConfigFromRequest(req);
+    const requestUrl = new URL(
+      req.url,
+      `http://${req.headers.host || `${HOST}:${PORT}`}`,
+    );
+    const countryCode = normalizeCountryCode(
+      requestUrl.searchParams.get("country"),
+    );
+    let lastError = null;
+
+    for (const radiusScale of GLOBAL_RANDOM_RADIUS_SCALES) {
+      for (let attempt = 1; attempt <= GLOBAL_ATTEMPTS_PER_RADIUS; attempt++) {
+        const requestedPoint = pickGlobalPoint(countryCode, radiusScale);
+        try {
+          const data = await fetchJson(
+            buildGlobalReverseUrl(requestedPoint),
+            {
+              method: "GET",
+              headers: {
+                accept: "application/json,text/plain,*/*",
+                "accept-language": `${requestedPoint.language},en;q=0.8`,
+                "cache-control": "no-cache",
+                pragma: "no-cache",
+                referer: "https://nominatim.openstreetmap.org/ui/reverse.html",
+                "user-agent": "random-address-generator-global/1.0",
+              },
+            },
+            8500,
+            proxyConfig,
+          );
+          const resolvedPoint = resolveValidatedGlobalPoint(
+            requestedPoint,
+            data,
+            countryCode,
+          );
+          if (!resolvedPoint) {
+            lastError = new Error("全球地图源未命中街道级地址");
+            continue;
+          }
+
+          sendJson(
+            res,
+            200,
+            normalizeGlobalIdentity(data, countryCode, resolvedPoint),
+          );
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+    }
+
+    throw lastError || new Error("全球地图源未返回可用地址");
   } catch (error) {
     sendJson(res, 502, { error: error.message || String(error) });
   }
@@ -868,8 +1546,16 @@ async function handleNominatim(req, res, url) {
 
 async function serveStatic(res, pathname) {
   const safePath = pathname === "/" ? "/index.html" : pathname;
-  const filePath = path.resolve(ROOT, `.${decodeURIComponent(safePath)}`);
-  if (!filePath.startsWith(ROOT)) {
+  let decodedPath = "";
+  try {
+    decodedPath = decodeURIComponent(safePath);
+  } catch (error) {
+    sendText(res, 400, "Bad Request");
+    return;
+  }
+  const filePath = path.resolve(ROOT, `.${decodedPath}`);
+  const relativePath = path.relative(ROOT, filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     sendText(res, 403, "Forbidden");
     return;
   }
@@ -903,6 +1589,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/real-address") {
     await handleRealAddress(req, res);
+    return;
+  }
+  if (url.pathname === "/api/global-address") {
+    await handleGlobalAddress(req, res);
     return;
   }
   if (url.pathname === "/api/nominatim-reverse") {
