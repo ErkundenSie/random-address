@@ -1240,27 +1240,21 @@ function updateSettingsSummary() {
     $("sourceSelect").value,
   );
   $("settingsStateBadge").textContent = getStateModeLabel();
+  $("settingsFallbackBadge").textContent = $("fallbackCheck").checked
+    ? "自动回退"
+    : "不回退";
+  $("settingsAutoBadge").textContent = $("autoGenerateCheck").checked
+    ? "自动生成"
+    : "手动生成";
 
   const proxyType = $("proxyTypeSelect").value;
   if (proxyType === "direct") {
-    $("settingsProxyBadge").textContent = [
-      "直连",
-      $("fallbackCheck").checked ? "自动回退" : "",
-      $("autoGenerateCheck").checked ? "自动生成" : "手动生成",
-    ]
-      .filter(Boolean)
-      .join(" · ");
+    $("settingsProxyBadge").textContent = "直连";
     return;
   }
 
-  const modeLabel = proxyType === "http" ? "HTTP 代理" : "SOCKS5 代理";
-  $("settingsProxyBadge").textContent = [
-    modeLabel,
-    $("fallbackCheck").checked ? "自动回退" : "",
-    $("autoGenerateCheck").checked ? "自动生成" : "手动生成",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  $("settingsProxyBadge").textContent =
+    proxyType === "http" ? "HTTP 代理" : "SOCKS5 代理";
 }
 
 function getStateNameByCode(stateCode) {
