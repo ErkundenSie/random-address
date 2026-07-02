@@ -91,6 +91,26 @@
               </label>
             </div>
 
+            <div class="quick-panel" aria-label="快捷生成">
+              <div class="quick-panel-copy">
+                <p class="eyebrow">Quick Pick</p>
+                <strong>快捷地区</strong>
+                <span>一键切换热门国家或美国免税州并生成</span>
+              </div>
+              <div class="quick-actions">
+                <button type="button" data-quick-country="US">美国</button>
+                <button type="button" data-quick-country="CA">加拿大</button>
+                <button type="button" data-quick-country="GB">英国</button>
+                <button type="button" data-quick-country="JP">日本</button>
+                <button type="button" data-quick-country="SG">新加坡</button>
+                <button type="button" data-quick-state="OR">俄勒冈免税</button>
+                <button type="button" data-quick-state="DE">特拉华免税</button>
+                <button type="button" data-quick-state="NH">新罕布什尔</button>
+                <button type="button" data-quick-state="MT">蒙大拿免税</button>
+                <button type="button" data-quick-state="AK">阿拉斯加</button>
+              </div>
+            </div>
+
             <details id="proxyDetails" class="proxy-settings">
               <summary class="proxy-header">
                 <div>
@@ -232,6 +252,33 @@
               </div>
               <div
                 class="copyable-field"
+                data-copy-key="password"
+                role="button"
+                tabindex="0"
+                title="点击复制密码"
+              >
+                <span>密码</span><strong id="passwordValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="birthday"
+                role="button"
+                tabindex="0"
+                title="点击复制生日"
+              >
+                <span>生日 / 年龄</span><strong id="birthdayValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="gender"
+                role="button"
+                tabindex="0"
+                title="点击复制性别"
+              >
+                <span>性别</span><strong id="genderValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
                 data-copy-key="line1"
                 role="button"
                 tabindex="0"
@@ -275,9 +322,6 @@
               >
                 <span>可信度</span><strong id="confidenceValue">-</strong>
               </div>
-              <div class="verify-field" title="Nominatim / OSM 反查核验详情">
-                <span>地图核验</span><strong id="mapVerifyValue">-</strong>
-              </div>
             </div>
 
             <div class="actions card-actions" aria-hidden="true"></div>
@@ -308,8 +352,10 @@
           </div>
           <div class="map-meta">
             <span id="mapStatusBadge">等待生成</span>
+            <button id="copyCoordsBtn" type="button" disabled>复制坐标</button>
+            <button id="openOsmBtn" type="button" disabled>OSM</button>
             <button id="openMapPreviewBtn" type="button" disabled>
-              打开地图
+              Google
             </button>
           </div>
         </div>
@@ -322,6 +368,15 @@
           ></iframe>
           <div id="mapPlaceholder" class="map-placeholder">
             生成地址后在这里显示地图位置
+          </div>
+          <div id="mapLoadingOverlay" class="map-loading-overlay is-hidden">
+            <div class="map-loader"></div>
+            <span>正在寻找可用街道地址...</span>
+          </div>
+          <div id="mapInfoCard" class="map-info-card is-hidden">
+            <span>坐标</span>
+            <strong id="mapCoordsValue">-</strong>
+            <small id="mapDetailValue">-</small>
           </div>
         </div>
       </section>

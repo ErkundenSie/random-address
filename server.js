@@ -123,6 +123,50 @@ const GLOBAL_NAME_DB = {
   first: ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Chris", "Jamie"],
   last: ["Smith", "Johnson", "Brown", "Lee", "Martin", "Garcia", "Wilson"],
 };
+const FAKER_LOCALE_BY_COUNTRY = {
+  US: "fakerEN_US",
+  CA: "fakerEN_CA",
+  GB: "fakerEN_GB",
+  AU: "fakerEN_AU",
+  DE: "fakerDE",
+  FR: "fakerFR",
+  JP: "fakerJA",
+  KR: "fakerKO",
+  SG: "fakerEN",
+  CN: "fakerZH_CN",
+};
+const NAME_WITHOUT_SPACE_COUNTRIES = new Set(["CN", "JP", "KR"]);
+const EAST_ASIAN_COUNTRIES = new Set(["CN", "JP", "KR"]);
+const EMAIL_DOMAINS = [
+  "gmail.com",
+  "outlook.com",
+  "yahoo.com",
+  "icloud.com",
+  "proton.me",
+];
+const PASSWORD_WORDS = [
+  "amber",
+  "atlas",
+  "beacon",
+  "cedar",
+  "coral",
+  "cosmo",
+  "ember",
+  "fable",
+  "forest",
+  "harbor",
+  "lunar",
+  "mango",
+  "maple",
+  "meadow",
+  "nova",
+  "olive",
+  "pearl",
+  "river",
+  "solar",
+  "willow",
+];
+let fakerModulePromise = null;
 const WATER_CATEGORIES = new Set(["waterway", "natural"]);
 const WATER_TYPES = new Set([
   "bay",
@@ -1024,6 +1068,157 @@ function makeGlobalPhone(countryCode) {
   return `+${phone.dial} ${digits.join(" ")}`;
 }
 
+async function getFakerModule() {
+  if (!fakerModulePromise) {
+    fakerModulePromise = import("@faker-js/faker");
+  }
+  return fakerModulePromise;
+}
+
+async function getLocalizedFaker(countryCode) {
+  const fakerModule = await getFakerModule();
+  const localeName = FAKER_LOCALE_BY_COUNTRY[countryCode] || "fakerEN_US";
+  return fakerModule[localeName] || fakerModule.fakerEN_US || fakerModule.faker;
+}
+
+function normalizeProfileCountryCode(value) {
+  const code = String(value || "US")
+    .trim()
+    .toUpperCase();
+  if (code === "UK") return "GB";
+  return GLOBAL_COUNTRIES[code] ? code : "US";
+}
+
+function formatDateIso(date) {
+  const safeDate =
+    date instanceof Date && !Number.isNaN(date.getTime())
+      ? date
+      : new Date(1988, 0, 1);
+  return safeDate.toISOString().slice(0, 10);
+}
+
+function getBirthYear(value) {
+  const year = Number(String(value || "").slice(0, 4));
+  return Number.isInteger(year) && year > 1900 ? String(year).slice(2) : "";
+}
+
+function sanitizeEmailPart(value, fallback = "user") {
+  const normalized = String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .toLowerCase();
+  return normalized || fallback;
+}
+
+function buildDisplayName(countryCode, firstName, lastName) {
+  if (NAME_WITHOUT_SPACE_COUNTRIES.has(countryCode))
+    return `${lastName}${firstName}`;
+  return `${firstName} ${lastName}`.trim();
+}
+
+function generatePreferredEmail({
+  firstName,
+  lastName,
+  fallbackFirst,
+  fallbackLast,
+  birthday,
+}) {
+  const first = sanitizeEmailPart(
+    firstName,
+    sanitizeEmailPart(fallbackFirst, "user"),
+  );
+  const last = sanitizeEmailPart(
+    lastName,
+    sanitizeEmailPart(fallbackLast, "mail"),
+  );
+  const fallbackFirstPart = sanitizeEmailPart(fallbackFirst, first);
+  const fallbackLastPart = sanitizeEmailPart(fallbackLast, last);
+  const year = getBirthYear(birthday);
+  const shortNumber = String(Math.floor(Math.random() * 90) + 10);
+  const patterns = [
+    `${first}.${last}`,
+    `${first}_${last}`,
+    `${first}${last}${year || shortNumber}`,
+    `${first.charAt(0)}${last}${shortNumber}`,
+    `${fallbackFirstPart}.${fallbackLastPart}${year || shortNumber}`,
+  ];
+  const localPart = getRandom(patterns)
+    .replace(/\.+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
+  return `${localPart}@${getRandom(EMAIL_DOMAINS)}`;
+}
+
+function generateMemorableStrongPassword() {
+  const wordA = getRandom(PASSWORD_WORDS);
+  const wordB = getRandom(PASSWORD_WORDS);
+  const number = Math.floor(Math.random() * 900) + 100;
+  const symbol = getRandom(["!", "#", "$", "%", "&"]);
+  return `${toTitleCaseWord(wordA)}${toTitleCaseWord(wordB)}${number}${symbol}`;
+}
+
+function generateReadablePhoneNumber(countryCode, areaCode = "") {
+  if (countryCode === "US" || countryCode === "CA")
+    return makeUsPhone(areaCode);
+  return makeGlobalPhone(countryCode);
+}
+
+async function generateLocalizedProfile(countryCode, areaCode = "") {
+  const safeCountryCode = normalizeProfileCountryCode(countryCode);
+  const localFaker = await getLocalizedFaker(safeCountryCode);
+  const fallbackFaker = await getLocalizedFaker("US");
+  const gender = Math.random() < 0.5 ? "male" : "female";
+  const firstName = localFaker.person.firstName(gender);
+  const lastName = localFaker.person.lastName(gender);
+  const fallbackFirst = fallbackFaker.person.firstName(gender);
+  const fallbackLast = fallbackFaker.person.lastName(gender);
+  const birthday = formatDateIso(
+    localFaker.date.birthdate({ min: 21, max: 58, mode: "age" }),
+  );
+  const name = buildDisplayName(safeCountryCode, firstName, lastName);
+
+  return {
+    name,
+    firstName,
+    lastName,
+    gender,
+    birthday,
+    email: generatePreferredEmail({
+      firstName: EAST_ASIAN_COUNTRIES.has(safeCountryCode)
+        ? fallbackFirst
+        : firstName,
+      lastName: EAST_ASIAN_COUNTRIES.has(safeCountryCode)
+        ? fallbackLast
+        : lastName,
+      fallbackFirst,
+      fallbackLast,
+      birthday,
+    }),
+    phone: generateReadablePhoneNumber(safeCountryCode, areaCode),
+    password: generateMemorableStrongPassword(),
+  };
+}
+
+async function handleProfile(req, res, url) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "Method Not Allowed" });
+    return;
+  }
+
+  try {
+    const countryCode = normalizeProfileCountryCode(
+      url.searchParams.get("country"),
+    );
+    const areaCode = String(url.searchParams.get("area") || "")
+      .replace(/\D/g, "")
+      .slice(0, 3);
+    sendJson(res, 200, await generateLocalizedProfile(countryCode, areaCode));
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || String(error) });
+  }
+}
+
 function normalizeGlobalIdentity(raw, countryCode, point) {
   if (!raw || typeof raw !== "object") throw new Error("全球地图源返回为空");
   if (raw.error) throw new Error(raw.error);
@@ -1597,6 +1792,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/nominatim-reverse") {
     await handleNominatim(req, res, url);
+    return;
+  }
+  if (url.pathname === "/api/profile") {
+    await handleProfile(req, res, url);
     return;
   }
   await serveStatic(res, url.pathname);

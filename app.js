@@ -24,6 +24,45 @@ const SOURCE_SITE_URLS = {
 const LOCAL_SERVER_HINT =
   "接口源需要通过本地服务打开：运行 start-local.bat，或在此目录执行 node server.js 后访问 http://127.0.0.1:8787";
 const TAX_FREE_STATES = ["OR", "DE", "NH", "MT", "AK"];
+const NominatimValidation = {
+  minStreetPlaceRank: 26,
+  maxReverseDistanceMeters: 350,
+  maxSnapDistanceMeters: 1800,
+  waterCategories: new Set(["waterway", "natural"]),
+  waterTypes: new Set([
+    "bay",
+    "coastline",
+    "harbour",
+    "lake",
+    "ocean",
+    "river",
+    "sea",
+    "strait",
+    "water",
+    "wetland",
+  ]),
+  coarseTypes: new Set([
+    "administrative",
+    "city",
+    "continent",
+    "country",
+    "county",
+    "district",
+    "hamlet",
+    "island",
+    "locality",
+    "municipality",
+    "neighbourhood",
+    "postcode",
+    "province",
+    "quarter",
+    "region",
+    "state",
+    "suburb",
+    "town",
+    "village",
+  ]),
+};
 const GLOBAL_COUNTRIES = [
   { code: "US", name: "United States" },
   { code: "CA", name: "Canada" },
@@ -362,6 +401,50 @@ const NAMES_DB = {
   ],
 };
 
+const GENDER_NAME_MAP = {
+  James: "male",
+  John: "male",
+  Robert: "male",
+  Michael: "male",
+  William: "male",
+  David: "male",
+  Richard: "male",
+  Joseph: "male",
+  Thomas: "male",
+  Charles: "male",
+  Chris: "male",
+  Mike: "male",
+  Mary: "female",
+  Patricia: "female",
+  Jennifer: "female",
+  Linda: "female",
+  Elizabeth: "female",
+  Barbara: "female",
+  Susan: "female",
+  Jessica: "female",
+  Sarah: "female",
+  Karen: "female",
+  Emily: "female",
+  Katie: "female",
+  Laura: "female",
+  Jane: "female",
+};
+
+const PASSWORD_WORDS = [
+  "amber",
+  "atlas",
+  "beacon",
+  "cedar",
+  "coral",
+  "ember",
+  "harbor",
+  "maple",
+  "nova",
+  "river",
+  "solar",
+  "willow",
+];
+
 const STATE_MAP = {
   alabama: "AL",
   alaska: "AK",
@@ -587,6 +670,194 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(start, end) {
+  const earthRadiusMeters = 6371000;
+  const deltaLat = toRadians(end.lat - start.lat);
+  const deltaLng = toRadians(end.lng - start.lng);
+  const startLat = toRadians(start.lat);
+  const endLat = toRadians(end.lat);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function generateBirthday() {
+  const now = new Date();
+  const age = Math.floor(Math.random() * 38) + 21;
+  const month = Math.floor(Math.random() * 12);
+  const day = Math.floor(Math.random() * 28) + 1;
+  const date = new Date(now.getFullYear() - age, month, day);
+  return date.toISOString().slice(0, 10);
+}
+
+function getAgeFromBirthday(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  let age = now.getFullYear() - date.getFullYear();
+  const hasNotHadBirthday =
+    now.getMonth() < date.getMonth() ||
+    (now.getMonth() === date.getMonth() && now.getDate() < date.getDate());
+  if (hasNotHadBirthday) age -= 1;
+  return `${age} 岁`;
+}
+
+function generatePassword() {
+  const wordA = getRandom(PASSWORD_WORDS);
+  const wordB = getRandom(PASSWORD_WORDS);
+  const number = Math.floor(Math.random() * 900) + 100;
+  const symbol = getRandom(["!", "#", "$", "%", "&"]);
+  return `${toTitleCaseWord(wordA)}${toTitleCaseWord(wordB)}${number}${symbol}`;
+}
+
+function getGenderFromName(name) {
+  const firstName = String(name || "")
+    .trim()
+    .split(/\s+/)[0];
+  const gender = GENDER_NAME_MAP[firstName];
+  return gender || getRandom(["male", "female"]);
+}
+
+function getGenderLabel(value) {
+  const gender = String(value || "").toLowerCase();
+  if (gender === "male") return "男";
+  if (gender === "female") return "女";
+  return value || "-";
+}
+
+function enrichIdentity(identity) {
+  if (!identity) return identity;
+  const gender = identity.gender || getGenderFromName(identity.name);
+  const birthday = identity.birthday || generateBirthday();
+  return {
+    ...identity,
+    gender,
+    birthday,
+    password: identity.password || generatePassword(),
+  };
+}
+
+function getIdentityCountryCode(identity) {
+  const countryCode = String(identity?.countryCode || "")
+    .trim()
+    .toUpperCase();
+  if (countryCode) return countryCode === "UK" ? "GB" : countryCode;
+  const country = String(identity?.country || "")
+    .trim()
+    .toUpperCase();
+  if (country === "UNITED STATES" || country === "USA" || country === "US") {
+    return "US";
+  }
+  if (country === "UNITED KINGDOM" || country === "UK" || country === "GB") {
+    return "GB";
+  }
+  const match = GLOBAL_COUNTRIES.find(
+    (item) => item.name.toUpperCase() === country || item.code === country,
+  );
+  return match?.code || "US";
+}
+
+async function enrichIdentityWithProfile(identity) {
+  const fallback = enrichIdentity(identity);
+  if (!fallback) return fallback;
+
+  try {
+    const params = new URLSearchParams({
+      country: getIdentityCountryCode(fallback),
+    });
+    if (fallback.areaCode) params.set("area", fallback.areaCode);
+    const profile = await fetchWithTimeout(
+      getLocalApiUrl(`/api/profile?${params.toString()}`),
+      buildLocalApiOptions({ headers: { accept: "application/json" } }),
+      4500,
+    );
+    if (!profile || typeof profile !== "object" || !profile.name) {
+      throw new Error("资料接口返回为空");
+    }
+    return {
+      ...fallback,
+      name: String(profile.name || fallback.name).trim(),
+      email: String(profile.email || fallback.email).trim(),
+      phone: String(profile.phone || fallback.phone).trim(),
+      gender: profile.gender || fallback.gender,
+      birthday: profile.birthday || fallback.birthday,
+      password: profile.password || fallback.password,
+      profileSource: "faker",
+    };
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function isNominatimWaterLike(result) {
+  const category = String(result?.category || "").toLowerCase();
+  const type = String(result?.type || result?.addresstype || "").toLowerCase();
+  return (
+    NominatimValidation.waterCategories.has(category) &&
+    NominatimValidation.waterTypes.has(type)
+  );
+}
+
+function isNominatimCoarseResult(result) {
+  const type = String(result?.type || "").toLowerCase();
+  const addressType = String(result?.addresstype || "").toLowerCase();
+  return (
+    NominatimValidation.coarseTypes.has(type) ||
+    NominatimValidation.coarseTypes.has(addressType)
+  );
+}
+
+function validateNominatimReverse(raw, point) {
+  if (isNominatimWaterLike(raw)) throw new Error("Nominatim 返回水域结果");
+  if (isNominatimCoarseResult(raw)) throw new Error("Nominatim 返回结果过粗");
+  if (Number(raw?.place_rank || 0) < NominatimValidation.minStreetPlaceRank) {
+    throw new Error("Nominatim 返回非街道级结果");
+  }
+
+  const reversePoint = { lat: Number(raw?.lat), lng: Number(raw?.lon) };
+  const requestedPoint = { lat: Number(point?.lat), lng: Number(point?.lng) };
+  if (
+    !Number.isFinite(reversePoint.lat) ||
+    !Number.isFinite(reversePoint.lng) ||
+    !Number.isFinite(requestedPoint.lat) ||
+    !Number.isFinite(requestedPoint.lng)
+  ) {
+    return { point, verification: null };
+  }
+
+  const distanceMeters = getDistanceMeters(requestedPoint, reversePoint);
+  if (distanceMeters <= NominatimValidation.maxReverseDistanceMeters) {
+    return {
+      point,
+      verification: {
+        streetLevel: true,
+        waterFiltered: true,
+        coarseFiltered: true,
+        distanceMeters: Math.round(distanceMeters),
+        snapped: false,
+      },
+    };
+  }
+  if (distanceMeters <= NominatimValidation.maxSnapDistanceMeters) {
+    return {
+      point: { ...point, lat: reversePoint.lat, lng: reversePoint.lng },
+      verification: {
+        streetLevel: true,
+        waterFiltered: true,
+        coarseFiltered: true,
+        distanceMeters: Math.round(distanceMeters),
+        snapped: true,
+      },
+    };
+  }
+  throw new Error(`Nominatim 坐标偏移过大: ${Math.round(distanceMeters)}m`);
+}
 
 function loadHistory() {
   try {
@@ -1305,6 +1576,9 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
   if (!raw || typeof raw !== "object") throw new Error("Nominatim 返回为空");
   if (raw.error) throw new Error(raw.error);
 
+  const validated = validateNominatimReverse(raw, point);
+  const verifiedPoint = validated.point || point;
+
   const address = raw.address || {};
   const countryCode = String(address.country_code || "")
     .trim()
@@ -1384,14 +1658,15 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
     state: finalState,
     zip,
     country: "US",
-    lat: point?.lat ?? raw.lat,
-    lng: point?.lng ?? raw.lon,
+    lat: verifiedPoint?.lat ?? raw.lat,
+    lng: verifiedPoint?.lng ?? raw.lon,
     stateName: getStateNameByCode(finalState),
     zipStateVerified,
     zipSource: rawZip ? "nominatim" : "fallback",
     confidence,
     confidenceLabel,
     confidenceReason,
+    mapVerification: validated.verification,
     source: "nominatim",
   };
 }
@@ -1534,12 +1809,29 @@ function getMapVerifyUrl(identity) {
   return "";
 }
 
+function getOpenStreetMapUrl(identity) {
+  if (!identity) return "";
+  const lat = Number(identity.lat);
+  const lng = Number(identity.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lng.toFixed(6)}#map=19/${lat.toFixed(6)}/${lng.toFixed(6)}`;
+  }
+  return "";
+}
+
+function getCoordinateText(identity) {
+  const lat = Number(identity?.lat);
+  const lng = Number(identity?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
 function getOpenStreetMapEmbedUrl(identity) {
   if (!identity) return "";
   const lat = Number(identity.lat);
   const lng = Number(identity.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
-  const delta = 0.0018;
+  const delta = 0.00085;
   const bbox = [lng - delta, lat - delta, lng + delta, lat + delta]
     .map((value) => value.toFixed(6))
     .join(",");
@@ -1573,10 +1865,17 @@ function updateMapPreview(identity) {
   const placeholder = $("mapPlaceholder");
   const status = $("mapStatusBadge");
   const button = $("openMapPreviewBtn");
+  const osmButton = $("openOsmBtn");
+  const coordsButton = $("copyCoordsBtn");
+  const infoCard = $("mapInfoCard");
+  const coordsValue = $("mapCoordsValue");
+  const detailValue = $("mapDetailValue");
   if (!frame || !placeholder || !status || !button) return;
 
   const embedUrl = getOpenStreetMapEmbedUrl(identity);
   const mapUrl = getMapVerifyUrl(identity);
+  const osmUrl = getOpenStreetMapUrl(identity);
+  const coords = getCoordinateText(identity);
   const hasMap = Boolean(embedUrl);
 
   frame.src = hasMap ? embedUrl : "about:blank";
@@ -1585,6 +1884,28 @@ function updateMapPreview(identity) {
   status.textContent = hasMap ? getMapVerificationText(identity) : "等待生成";
   button.disabled = !mapUrl;
   button.dataset.url = mapUrl;
+  if (osmButton) {
+    osmButton.disabled = !osmUrl;
+    osmButton.dataset.url = osmUrl;
+  }
+  if (coordsButton) {
+    coordsButton.disabled = !coords;
+    coordsButton.dataset.coords = coords;
+  }
+  if (infoCard && coordsValue && detailValue) {
+    infoCard.classList.toggle("is-hidden", !hasMap);
+    coordsValue.textContent = coords || "-";
+    detailValue.textContent = hasMap
+      ? `${identity.city || "-"} · ${getSourceLabel(identity.source)} · ${getConfidenceText(identity)}`
+      : "-";
+  }
+}
+
+function setMapLoading(isLoading) {
+  const panel = document.querySelector(".map-panel");
+  const overlay = $("mapLoadingOverlay");
+  panel?.classList.toggle("is-loading", isLoading);
+  overlay?.classList.toggle("is-hidden", !isLoading);
 }
 
 function formatFullAddress(id) {
@@ -1624,13 +1945,26 @@ function getCountryDisplayName(country) {
 
 function toCopyText(id) {
   if (isEastAsianCountry(id.countryCode)) {
-    return [id.name, id.email, id.phone, formatFullAddress(id)]
+    return [
+      id.name,
+      getGenderLabel(id.gender),
+      [id.birthday, getAgeFromBirthday(id.birthday)]
+        .filter(Boolean)
+        .join(" · "),
+      id.email,
+      id.password,
+      id.phone,
+      formatFullAddress(id),
+    ]
       .filter(Boolean)
       .join("\n");
   }
   return [
     id.name,
+    getGenderLabel(id.gender),
+    [id.birthday, getAgeFromBirthday(id.birthday)].filter(Boolean).join(" · "),
     id.email,
+    id.password,
     id.phone,
     id.line1,
     id.line2,
@@ -1648,6 +1982,11 @@ function getFieldCopyValue(key, id) {
     name: id.name,
     email: id.email,
     phone: id.phone,
+    password: id.password,
+    birthday: [id.birthday, getAgeFromBirthday(id.birthday)]
+      .filter(Boolean)
+      .join(" · "),
+    gender: getGenderLabel(id.gender),
     line1: id.line1,
     city: id.city,
     state: id.state,
@@ -1706,6 +2045,7 @@ function setConfidence(id) {
 }
 
 function renderIdentity(id) {
+  id = enrichIdentity(id);
   state.currentIdentity = id;
   setText("sourceBadge", getSourceLabel(id.source));
   updateSourceButton(id.source);
@@ -1715,6 +2055,12 @@ function renderIdentity(id) {
   setText("nameValue", id.name);
   setText("emailValue", id.email);
   setText("phoneValue", id.phone);
+  setText("passwordValue", id.password);
+  setText(
+    "birthdayValue",
+    [id.birthday, getAgeFromBirthday(id.birthday)].filter(Boolean).join(" · "),
+  );
+  setText("genderValue", getGenderLabel(id.gender));
   setText("line1Value", id.line1);
   setText("cityValue", id.city);
   setText(
@@ -1722,7 +2068,6 @@ function renderIdentity(id) {
     `${id.state}${id.stateName ? ` / ${id.stateName}` : ""}`,
   );
   setText("zipValue", id.zip);
-  setText("mapVerifyValue", getMapVerificationText(id));
   setConfidence(id);
   $("copyAddressBtn").disabled = false;
   $("copyJsonBtn").disabled = false;
@@ -1732,6 +2077,7 @@ function setBusy(isBusy) {
   state.isBusy = isBusy;
   $("generateBtn").disabled = isBusy;
   $("generateBtn").textContent = isBusy ? "生成中..." : "生成随机地址";
+  setMapLoading(isBusy);
 }
 
 function showToast(message, isError = false) {
@@ -1753,7 +2099,7 @@ async function handleGenerate() {
   setBusy(true);
   saveSettings();
   try {
-    const id = await generateIdentity();
+    const id = await enrichIdentityWithProfile(await generateIdentity());
     renderIdentity(id);
     addToHistory(id);
     const fallbackNotice = getFallbackNotice(id);
@@ -1799,6 +2145,30 @@ function updateStateVisibility() {
   );
 }
 
+function refreshSettingsUi() {
+  updateStateVisibility();
+  updateProxyVisibility();
+  updateSettingsSummary();
+  saveSettings();
+}
+
+function handleQuickCountry(countryCode) {
+  $("sourceSelect").value = ADDRESS_SOURCE.GLOBAL;
+  $("countrySelect").value = countryCode;
+  refreshSettingsUi();
+  handleGenerate();
+}
+
+function handleQuickState(stateCode) {
+  if ($("sourceSelect").value === ADDRESS_SOURCE.GLOBAL) {
+    $("sourceSelect").value = ADDRESS_SOURCE.LOCAL;
+  }
+  $("stateModeSelect").value = "specific";
+  $("stateSelect").value = stateCode;
+  refreshSettingsUi();
+  handleGenerate();
+}
+
 function init() {
   state.history = loadHistory();
   populateStates();
@@ -1829,6 +2199,16 @@ function init() {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
   });
+  $("openOsmBtn").addEventListener("click", () => {
+    const url = $("openOsmBtn").dataset.url;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  });
+  $("copyCoordsBtn").addEventListener("click", () => {
+    const coords = $("copyCoordsBtn").dataset.coords;
+    if (!coords) return;
+    copyText(coords);
+  });
   $("openSourceBtn").addEventListener("click", () => {
     const url = $("openSourceBtn").dataset.url;
     if (!url) return;
@@ -1858,6 +2238,16 @@ function init() {
         copyFieldValue(field.dataset.copyKey);
       });
     });
+  document.querySelectorAll("[data-quick-country]").forEach((button) => {
+    button.addEventListener("click", () =>
+      handleQuickCountry(button.dataset.quickCountry),
+    );
+  });
+  document.querySelectorAll("[data-quick-state]").forEach((button) => {
+    button.addEventListener("click", () =>
+      handleQuickState(button.dataset.quickState),
+    );
+  });
   [
     "sourceSelect",
     "countrySelect",
@@ -1874,10 +2264,7 @@ function init() {
       id.endsWith("Select") || id === "fallbackCheck" ? "change" : "input";
     $(id).addEventListener(eventName, () => {
       state.lastFallbackNotice = "";
-      updateStateVisibility();
-      updateProxyVisibility();
-      updateSettingsSummary();
-      saveSettings();
+      refreshSettingsUi();
     });
   });
   updateSourceButton("");
