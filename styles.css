@@ -2268,8 +2268,11 @@ button:active:not(:disabled),
 .check-card,
 .proxy-grid .field-card {
   border-color: rgba(146, 64, 14, 0.09);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 251, 245, 0.82));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.94),
+    rgba(255, 251, 245, 0.82)
+  );
 }
 
 .check-card {
@@ -2297,7 +2300,11 @@ input {
 .quick-panel {
   border-radius: 9px;
   background:
-    radial-gradient(circle at 8% 0%, rgba(251, 146, 60, 0.12), transparent 16rem),
+    radial-gradient(
+      circle at 8% 0%,
+      rgba(251, 146, 60, 0.12),
+      transparent 16rem
+    ),
     linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(255, 255, 255, 0.96));
 }
 
@@ -2319,8 +2326,16 @@ input {
 
 .address-overview {
   background:
-    linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.96) 62%),
-    radial-gradient(circle at 100% 0%, rgba(251, 146, 60, 0.14), transparent 14rem);
+    linear-gradient(
+      135deg,
+      rgba(255, 247, 237, 0.98),
+      rgba(255, 255, 255, 0.96) 62%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(251, 146, 60, 0.14),
+      transparent 14rem
+    );
 }
 
 .grid {
@@ -2346,7 +2361,11 @@ input {
 }
 
 .card-actions {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 251, 245, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.86),
+    rgba(255, 251, 245, 0.92)
+  );
 }
 
 .map-frame-shell {
