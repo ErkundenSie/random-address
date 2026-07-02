@@ -942,6 +942,7 @@ function loadSettings() {
       stateCode: parsed.stateCode || "OR",
       countryCode: parsed.countryCode || "US",
       fallback: parsed.fallback !== false,
+      autoGenerate: parsed.autoGenerate !== false,
       proxyType: parsed.proxyType || "direct",
       proxyHost: parsed.proxyHost || "127.0.0.1",
       proxyPort: parsed.proxyPort || "7890",
@@ -955,6 +956,7 @@ function loadSettings() {
       stateCode: "OR",
       countryCode: "US",
       fallback: true,
+      autoGenerate: true,
       proxyType: "direct",
       proxyHost: "127.0.0.1",
       proxyPort: "7890",
@@ -1152,6 +1154,7 @@ function saveSettings() {
       stateCode: $("stateSelect").value,
       countryCode: $("countrySelect").value,
       fallback: $("fallbackCheck").checked,
+      autoGenerate: $("autoGenerateCheck").checked,
       proxyType: $("proxyTypeSelect").value,
       proxyHost: $("proxyHostInput").value,
       proxyPort: $("proxyPortInput").value,
@@ -1240,16 +1243,24 @@ function updateSettingsSummary() {
 
   const proxyType = $("proxyTypeSelect").value;
   if (proxyType === "direct") {
-    $("settingsProxyBadge").textContent = $("fallbackCheck").checked
-      ? "直连 · 自动回退"
-      : "直连";
+    $("settingsProxyBadge").textContent = [
+      "直连",
+      $("fallbackCheck").checked ? "自动回退" : "",
+      $("autoGenerateCheck").checked ? "自动生成" : "手动生成",
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return;
   }
 
   const modeLabel = proxyType === "http" ? "HTTP 代理" : "SOCKS5 代理";
-  $("settingsProxyBadge").textContent = $("fallbackCheck").checked
-    ? `${modeLabel} · 自动回退`
-    : modeLabel;
+  $("settingsProxyBadge").textContent = [
+    modeLabel,
+    $("fallbackCheck").checked ? "自动回退" : "",
+    $("autoGenerateCheck").checked ? "自动生成" : "手动生成",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function getStateNameByCode(stateCode) {
@@ -2090,7 +2101,21 @@ function showToast(message, isError = false) {
 }
 
 async function copyText(text) {
-  await navigator.clipboard.writeText(text);
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    if (!copied) throw error;
+  }
   showToast("已复制");
 }
 
@@ -2179,6 +2204,7 @@ function init() {
   $("stateSelect").value = settings.stateCode;
   $("countrySelect").value = settings.countryCode;
   $("fallbackCheck").checked = settings.fallback;
+  $("autoGenerateCheck").checked = settings.autoGenerate;
   $("proxyTypeSelect").value = settings.proxyType;
   $("proxyHostInput").value = settings.proxyHost;
   $("proxyPortInput").value = settings.proxyPort;
@@ -2254,6 +2280,7 @@ function init() {
     "stateModeSelect",
     "stateSelect",
     "fallbackCheck",
+    "autoGenerateCheck",
     "proxyTypeSelect",
     "proxyHostInput",
     "proxyPortInput",
@@ -2261,7 +2288,7 @@ function init() {
     "proxyPasswordInput",
   ].forEach((id) => {
     const eventName =
-      id.endsWith("Select") || id === "fallbackCheck" ? "change" : "input";
+      id.endsWith("Select") || id.endsWith("Check") ? "change" : "input";
     $(id).addEventListener(eventName, () => {
       state.lastFallbackNotice = "";
       refreshSettingsUi();
@@ -2270,6 +2297,7 @@ function init() {
   updateSourceButton("");
   updateMapButton(null);
   renderHistory();
+  if (settings.autoGenerate) window.setTimeout(() => handleGenerate(), 80);
 }
 
 init();

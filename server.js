@@ -706,8 +706,71 @@ const MIME = {
 };
 const PROXY_AGENT_CACHE = new Map();
 
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer-when-downgrade",
+  "cross-origin-opener-policy": "same-origin",
+};
+
+const API_RATE_LIMIT_WINDOW_MS = Math.max(
+  Number(process.env.API_RATE_LIMIT_WINDOW_MS || 60_000),
+  1_000,
+);
+const API_RATE_LIMIT_MAX = Math.max(
+  Number(process.env.API_RATE_LIMIT_MAX || 90),
+  1,
+);
+const API_RATE_LIMIT_BUCKETS = new Map();
+
+function getClientKey(req) {
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function cleanupRateLimitBuckets(now) {
+  if (API_RATE_LIMIT_BUCKETS.size < 1024) return;
+  for (const [key, bucket] of API_RATE_LIMIT_BUCKETS) {
+    if (bucket.resetAt <= now) API_RATE_LIMIT_BUCKETS.delete(key);
+  }
+}
+
+function consumeApiRateLimit(req) {
+  const now = Date.now();
+  const key = getClientKey(req);
+  const bucket = API_RATE_LIMIT_BUCKETS.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    API_RATE_LIMIT_BUCKETS.set(key, {
+      count: 1,
+      resetAt: now + API_RATE_LIMIT_WINDOW_MS,
+    });
+    cleanupRateLimitBuckets(now);
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  bucket.count += 1;
+  if (bucket.count <= API_RATE_LIMIT_MAX) {
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  return {
+    allowed: false,
+    retryAfter: Math.ceil((bucket.resetAt - now) / 1000),
+  };
+}
+
+function enforceApiRateLimit(req, res) {
+  const result = consumeApiRateLimit(req);
+  if (result.allowed) return true;
+  sendJson(res, 429, {
+    error: "请求过于频繁，请稍后再试",
+    retryAfter: result.retryAfter,
+  });
+  return false;
+}
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
+    ...SECURITY_HEADERS,
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
   });
@@ -715,7 +778,10 @@ function sendJson(res, statusCode, data) {
 }
 
 function sendText(res, statusCode, text) {
-  res.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
+  res.writeHead(statusCode, {
+    ...SECURITY_HEADERS,
+    "content-type": "text/plain; charset=utf-8",
+  });
   res.end(text);
 }
 
@@ -1758,6 +1824,7 @@ async function serveStatic(res, pathname) {
   try {
     const content = await fs.readFile(filePath);
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
       "content-type":
         MIME[path.extname(filePath)] || "application/octet-stream",
       "cache-control": "no-store",
@@ -1773,6 +1840,10 @@ const server = http.createServer(async (req, res) => {
     req.url,
     `http://${req.headers.host || `${HOST}:${PORT}`}`,
   );
+
+  if (url.pathname.startsWith("/api/") && !enforceApiRateLimit(req, res)) {
+    return;
+  }
 
   if (url.pathname === "/api/fake-address") {
     await handleFakeAddress(req, res);

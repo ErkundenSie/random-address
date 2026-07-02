@@ -2239,3 +2239,283 @@ button:active:not(:disabled),
     bottom: 10px;
   }
 }
+
+/* Visual finish: softer hierarchy and cleaner form density */
+:root {
+  --surface-glow: 0 18px 42px rgba(146, 89, 35, 0.1);
+  --inner-line: rgba(249, 115, 22, 0.08);
+}
+
+.hero,
+.panel,
+.address-card,
+.quick-panel,
+.proxy-settings {
+  border-color: rgba(146, 64, 14, 0.1);
+  box-shadow: var(--surface-glow);
+}
+
+.panel,
+.address-card {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.controls-main {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.field-card,
+.check-card,
+.proxy-grid .field-card {
+  border-color: rgba(146, 64, 14, 0.09);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 251, 245, 0.82));
+}
+
+.check-card {
+  min-height: 54px;
+}
+
+.check-card:has(input:checked) {
+  border-color: rgba(249, 115, 22, 0.26);
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.96), #fff);
+  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.38);
+}
+
+.check-card small {
+  display: block;
+  margin-top: 0.08rem;
+}
+
+select,
+input {
+  min-height: 34px;
+  border-color: rgba(146, 64, 14, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.quick-panel {
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(251, 146, 60, 0.12), transparent 16rem),
+    linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(255, 255, 255, 0.96));
+}
+
+.quick-actions button,
+.result-tools button,
+.actions button,
+.history-panel button,
+.map-meta button {
+  border-radius: 999px;
+}
+
+.quick-actions button {
+  color: #9a3412;
+}
+
+.address-card {
+  overflow: hidden;
+}
+
+.address-overview {
+  background:
+    linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.96) 62%),
+    radial-gradient(circle at 100% 0%, rgba(251, 146, 60, 0.14), transparent 14rem);
+}
+
+.grid {
+  gap: 1px;
+  border-top: 1px solid var(--inner-line);
+  background: var(--inner-line);
+}
+
+.grid > div {
+  border: 0;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.grid > .copyable-field:hover,
+.grid > .copyable-field:focus-visible {
+  background: rgba(255, 247, 237, 0.92);
+  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.44);
+}
+
+.grid span,
+.map-info-card span {
+  text-transform: uppercase;
+}
+
+.card-actions {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 251, 245, 0.92));
+}
+
+.map-frame-shell {
+  border-color: rgba(146, 64, 14, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.64);
+}
+
+.map-info-card {
+  box-shadow: 0 18px 40px rgba(88, 53, 18, 0.15);
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: min(100% - 16px, 1360px);
+    padding-top: 4px;
+  }
+
+  .controls-main {
+    gap: 7px;
+  }
+
+  .check-card {
+    min-height: 50px;
+  }
+
+  .address-overview,
+  .card-actions {
+    padding-inline: 10px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid > div:nth-child(4n) {
+    border-right: 0;
+  }
+
+  .result-tools,
+  .actions {
+    width: 100%;
+  }
+
+  .result-tools button,
+  .actions button {
+    flex: 1 1 calc(50% - 6px);
+  }
+}
+
+@media (max-width: 420px) {
+  .quick-actions button,
+  .map-meta button,
+  .result-tools button,
+  .actions button {
+    flex-basis: 100%;
+  }
+
+  .map-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Square finish: remove rounded/pill look and keep the original result grid style */
+button,
+select,
+input,
+textarea,
+.hero,
+.panel,
+.address-card,
+.quick-panel,
+.proxy-settings,
+.field-card,
+.check-card,
+.compact-field,
+.address-overview,
+.card-actions,
+.result-tools button,
+.actions button,
+.history-panel button,
+.quick-actions button,
+.map-meta button,
+.history-item,
+.map-frame-shell,
+.map-info-card,
+.toast,
+.source-badge,
+.settings-badges span,
+#mapStatusBadge {
+  border-radius: 0 !important;
+}
+
+.quick-actions button,
+.result-tools button,
+.actions button,
+.history-panel button,
+.map-meta button {
+  min-height: 34px;
+  border-color: rgba(234, 88, 12, 0.18);
+  background: rgba(255, 251, 245, 0.82);
+  color: #b45309;
+  box-shadow: none;
+}
+
+.quick-actions button:hover:not(:disabled),
+.result-tools button:hover:not(:disabled),
+.actions button:hover:not(:disabled),
+.history-panel button:hover:not(:disabled),
+.map-meta button:hover:not(:disabled) {
+  border-color: rgba(234, 88, 12, 0.32);
+  background: rgba(255, 237, 213, 0.72);
+  box-shadow: none;
+}
+
+.grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 14px 16px;
+  border-top: 1px solid rgba(249, 115, 22, 0.1);
+  background: rgba(255, 251, 245, 0.72);
+}
+
+.grid > div {
+  min-height: 76px;
+  padding: 13px 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: none;
+}
+
+.grid > .copyable-field:hover,
+.grid > .copyable-field:focus-visible {
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 2px 0 0 rgba(249, 115, 22, 0.42);
+}
+
+.grid > div:last-child {
+  border-color: rgba(251, 146, 60, 0.5);
+  background: rgba(255, 251, 245, 0.8);
+}
+
+.grid span,
+.map-info-card span {
+  color: #64748b;
+  text-transform: none;
+}
+
+.grid strong {
+  margin-top: 0.34rem;
+  color: #1f2937;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
