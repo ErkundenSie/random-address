@@ -6,6 +6,10 @@
     <meta name="theme-color" content="#ea580c" />
     <title>随机地址生成器</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -222,7 +226,7 @@
               </div>
 
               <div class="result-tools">
-                <button id="openMapBtn" type="button" disabled>地图核验</button>
+                <button id="openMapBtn" type="button" disabled>卫星核验</button>
                 <button id="openSourceBtn" type="button" disabled>
                   打开源站
                 </button>
@@ -368,19 +372,18 @@
             <button id="copyCoordsBtn" type="button" disabled>复制坐标</button>
             <button id="openOsmBtn" type="button" disabled>OSM</button>
             <button id="openMapPreviewBtn" type="button" disabled>
-              Google
+              卫星地图
             </button>
           </div>
         </div>
         <div class="map-frame-shell">
-          <iframe
-            id="mapFrame"
-            title="地址地图预览"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-          ></iframe>
+          <div
+            id="mapPicker"
+            role="application"
+            aria-label="可自由选点的卫星地图"
+          ></div>
           <div id="mapPlaceholder" class="map-placeholder">
-            生成地址后在这里显示地图位置
+            点击卫星地图可自由选点；生成地址后会自动定位到结果坐标
           </div>
           <div id="mapLoadingOverlay" class="map-loading-overlay is-hidden">
             <div class="map-loader"></div>
@@ -397,6 +400,7 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </main>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

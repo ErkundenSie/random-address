@@ -852,7 +852,7 @@ h2 {
   background-size: 28px 28px;
 }
 
-#mapFrame {
+#mapPicker {
   display: block;
   width: 100%;
   height: 270px;
@@ -862,8 +862,21 @@ h2 {
   transition: opacity 0.18s ease;
 }
 
-#mapFrame.is-ready {
+#mapPicker.is-ready {
   opacity: 1;
+}
+
+#mapPicker.map-picker-unavailable {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  opacity: 1;
+}
+
+#mapPicker .leaflet-control-attribution {
+  font-size: 10px;
 }
 
 .map-placeholder {
@@ -1448,7 +1461,7 @@ h2 {
 }
 
 .map-frame-shell,
-#mapFrame {
+#mapPicker {
   height: 300px;
 }
 
@@ -2137,7 +2150,7 @@ button:active:not(:disabled),
   min-height: 340px;
 }
 
-#mapFrame {
+#mapPicker {
   height: 340px;
 }
 

@@ -24,6 +24,12 @@ const SOURCE_SITE_URLS = {
 const LOCAL_SERVER_HINT =
   "接口源需要通过本地服务打开：运行 start-local.bat，或在此目录执行 node server.js 后访问 http://127.0.0.1:8787";
 const TAX_FREE_STATES = ["OR", "DE", "NH", "MT", "AK"];
+const SATELLITE_TILE_LAYER = {
+  url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  labelsUrl:
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+  attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+};
 const NominatimValidation = {
   minStreetPlaceRank: 26,
   maxReverseDistanceMeters: 350,
@@ -665,6 +671,13 @@ const state = {
   isBusy: false,
   history: [],
   lastFallbackNotice: "",
+  selectedMapPoint: null,
+  map: {
+    instance: null,
+    marker: null,
+    ready: false,
+  },
+  mapSelectionSequence: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1676,6 +1689,115 @@ function normalizeNominatimIdentity(raw, expectedStateCode = "", point = null) {
   };
 }
 
+function normalizePickedMapIdentity(raw, point, fallback = null) {
+  if (!raw || typeof raw !== "object") throw new Error("地图反查返回为空");
+  if (raw.error) throw new Error(raw.error);
+
+  const address = raw.address || {};
+  const countryCode = String(
+    address.country_code || fallback?.countryCode || "",
+  )
+    .trim()
+    .toUpperCase();
+  const road = getNominatimAddressPart(address, [
+    "road",
+    "pedestrian",
+    "residential",
+    "footway",
+    "cycleway",
+    "path",
+  ]);
+  const rawHouseNumber = getNominatimAddressPart(address, ["house_number"]);
+  const name = String(raw.name || "").trim();
+  const line1 = [rawHouseNumber, toTitleCaseText(road)]
+    .filter(Boolean)
+    .join(" ");
+  const city = toTitleCaseText(
+    getNominatimAddressPart(address, [
+      "city",
+      "town",
+      "village",
+      "municipality",
+      "hamlet",
+      "suburb",
+      "county",
+    ]),
+  );
+  const normalizedState = normalizeNominatimStateCode(address);
+  const rawState = getNominatimAddressPart(address, [
+    "state",
+    "region",
+    "province",
+    "county",
+  ]);
+  const stateCode =
+    countryCode === "US" ? normalizedState || fallback?.state || "" : rawState;
+  const stateName =
+    countryCode === "US" && stateCode
+      ? getStateNameByCode(stateCode)
+      : toTitleCaseText(rawState);
+  const rawZip = String(address.postcode || "").trim();
+  const zip = countryCode === "US" ? normalizeZip5(rawZip, "") : rawZip;
+  const zipStateVerified =
+    countryCode === "US"
+      ? Boolean(zip && stateCode && isZipInState(zip, stateCode))
+      : Boolean(zip);
+  const resolvedPoint = {
+    lat: Number(point?.lat ?? raw.lat),
+    lng: Number(point?.lng ?? raw.lon),
+  };
+  if (!line1 && !name) throw new Error("地图反查未返回可用街道地址");
+
+  return {
+    ...(fallback || {}),
+    line1: line1 || toTitleCaseText(name),
+    line2: "",
+    city: city || fallback?.city || "",
+    state: stateCode || fallback?.state || "",
+    zip: zip || fallback?.zip || "",
+    country: countryCode || fallback?.country || "",
+    countryCode: countryCode || fallback?.countryCode || "",
+    lat: resolvedPoint.lat,
+    lng: resolvedPoint.lng,
+    stateName,
+    zipStateVerified,
+    zipSource: zip ? "nominatim" : fallback?.zipSource,
+    confidence: zipStateVerified && rawHouseNumber ? "high" : "medium",
+    confidenceLabel: zipStateVerified && rawHouseNumber ? "高" : "中",
+    confidenceReason: rawHouseNumber
+      ? "已根据卫星地图选点反查到门牌级地址"
+      : "已根据卫星地图选点反查到街道级地址",
+    mapVerification: {
+      manuallySelected: true,
+      streetLevel: Boolean(road || rawHouseNumber),
+      waterFiltered: !isNominatimWaterLike(raw),
+      coarseFiltered: !isNominatimCoarseResult(raw),
+      distanceMeters: 0,
+      snapped: false,
+    },
+    source: "nominatim-picked",
+  };
+}
+
+function buildPickedPointFallbackIdentity(point, fallback = null) {
+  const coords = `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+  return {
+    ...(fallback || {}),
+    line1: `卫星选点 ${coords}`,
+    line2: "",
+    lat: point.lat,
+    lng: point.lng,
+    confidence: "low",
+    confidenceLabel: "低",
+    confidenceReason: "已选择卫星地图坐标，正在反查详细地址",
+    mapVerification: {
+      ...(fallback?.mapVerification || {}),
+      manuallySelected: true,
+    },
+    source: "nominatim-picked",
+  };
+}
+
 function buildNominatimReverseUrl(point) {
   const params = new URLSearchParams({
     format: "jsonv2",
@@ -1694,6 +1816,22 @@ function buildNominatimProxyUrl(point) {
     lon: String(point.lng),
   });
   return getLocalApiUrl(`/api/nominatim-reverse?${params.toString()}`);
+}
+
+async function fetchPickedMapReverse(point) {
+  try {
+    return await fetchWithTimeout(
+      buildNominatimProxyUrl(point),
+      buildLocalApiOptions({ headers: { accept: "application/json" } }),
+      15000,
+    );
+  } catch (error) {
+    return await fetchWithTimeout(
+      buildNominatimReverseUrl(point),
+      { headers: { accept: "application/json" } },
+      15000,
+    );
+  }
 }
 
 async function fetchIdentityFromNominatim() {
@@ -1802,14 +1940,19 @@ function getSourceSiteUrl(source) {
 
 function getMapVerifyUrl(identity) {
   if (!identity) return "";
-  const query = formatFullAddress(identity);
-  if (query) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  }
   const lat = Number(identity.lat);
   const lng = Number(identity.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+    const point = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    return `https://www.google.com/maps/place/${point}/@${point},19z/data=!3m1!1e3`;
+  }
+  const query = formatFullAddress(identity);
+  if (query) {
+    const params = new URLSearchParams({
+      where1: query,
+      style: "a",
+    });
+    return `https://www.bing.com/maps?${params.toString()}`;
   }
   return "";
 }
@@ -1831,21 +1974,104 @@ function getCoordinateText(identity) {
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
-function getOpenStreetMapEmbedUrl(identity) {
-  if (!identity) return "";
-  const lat = Number(identity.lat);
-  const lng = Number(identity.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
-  const delta = 0.00085;
-  const bbox = [lng - delta, lat - delta, lng + delta, lat + delta]
-    .map((value) => value.toFixed(6))
-    .join(",");
-  const params = new URLSearchParams({
-    bbox,
-    layer: "mapnik",
-    marker: `${lat.toFixed(6)},${lng.toFixed(6)}`,
+function getValidPoint(identity) {
+  const lat = Number(identity?.lat);
+  const lng = Number(identity?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+function initMapPicker() {
+  const container = $("mapPicker");
+  if (!container || state.map.ready) return;
+  if (!window.L) {
+    container.classList.add("map-picker-unavailable");
+    container.textContent = "卫星地图组件加载失败，请检查网络后刷新。";
+    return;
+  }
+
+  const map = window.L.map(container, {
+    center: [39.5, -98.35],
+    zoom: 4,
+    scrollWheelZoom: true,
+    attributionControl: false,
   });
-  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+  window.L.tileLayer(SATELLITE_TILE_LAYER.url, {
+    maxZoom: 19,
+    attribution: SATELLITE_TILE_LAYER.attribution,
+  }).addTo(map);
+  window.L.tileLayer(SATELLITE_TILE_LAYER.labelsUrl, { maxZoom: 19 }).addTo(
+    map,
+  );
+  window.L.control.attribution({ prefix: false }).addTo(map);
+
+  const marker = window.L.marker([39.5, -98.35], { draggable: true });
+  marker.on("dragend", () => {
+    const point = marker.getLatLng();
+    handleMapPointSelect(point.lat, point.lng);
+  });
+  map.on("click", (event) => {
+    handleMapPointSelect(event.latlng.lat, event.latlng.lng);
+  });
+
+  state.map.instance = map;
+  state.map.marker = marker;
+  state.map.ready = true;
+  window.setTimeout(() => map.invalidateSize(), 0);
+}
+
+function syncMapPicker(point, shouldZoom = true) {
+  initMapPicker();
+  const map = state.map.instance;
+  const marker = state.map.marker;
+  if (!map || !marker || !point) return;
+
+  const latLng = [point.lat, point.lng];
+  marker.setLatLng(latLng);
+  if (!map.hasLayer(marker)) marker.addTo(map);
+  if (shouldZoom) {
+    map.setView(latLng, Math.max(map.getZoom(), 17), { animate: true });
+  }
+  window.setTimeout(() => map.invalidateSize(), 0);
+}
+
+async function handleMapPointSelect(lat, lng) {
+  const point = {
+    lat: Number(lat),
+    lng: Number(lng),
+  };
+  if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return;
+
+  const sequence = ++state.mapSelectionSequence;
+  state.selectedMapPoint = point;
+  const immediateIdentity = buildPickedPointFallbackIdentity(
+    point,
+    state.currentIdentity || generateFallbackIdentity(),
+  );
+  renderIdentity(immediateIdentity);
+  updateMapPreview(immediateIdentity, false);
+  showToast(
+    `已选择卫星核验点：${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`,
+  );
+
+  try {
+    setMapLoading(true);
+    const data = await fetchPickedMapReverse(point);
+    if (sequence !== state.mapSelectionSequence) return;
+    const pickedIdentity = normalizePickedMapIdentity(
+      data,
+      point,
+      state.currentIdentity || immediateIdentity,
+    );
+    renderIdentity(pickedIdentity);
+    showToast("已根据选点更新地址信息");
+  } catch (error) {
+    if (sequence === state.mapSelectionSequence) {
+      showToast(error.message || String(error), true);
+    }
+  } finally {
+    if (sequence === state.mapSelectionSequence) setMapLoading(false);
+  }
 }
 
 function updateSourceButton(source) {
@@ -1865,8 +2091,8 @@ function updateMapButton(identity) {
   button.dataset.url = url;
 }
 
-function updateMapPreview(identity) {
-  const frame = $("mapFrame");
+function updateMapPreview(identity, shouldZoom = true) {
+  const mapPicker = $("mapPicker");
   const placeholder = $("mapPlaceholder");
   const status = $("mapStatusBadge");
   const button = $("openMapPreviewBtn");
@@ -1875,18 +2101,25 @@ function updateMapPreview(identity) {
   const infoCard = $("mapInfoCard");
   const coordsValue = $("mapCoordsValue");
   const detailValue = $("mapDetailValue");
-  if (!frame || !placeholder || !status || !button) return;
+  if (!mapPicker || !placeholder || !status || !button) return;
 
-  const embedUrl = getOpenStreetMapEmbedUrl(identity);
+  const point = getValidPoint(identity) || state.selectedMapPoint;
   const mapUrl = getMapVerifyUrl(identity);
   const osmUrl = getOpenStreetMapUrl(identity);
-  const coords = getCoordinateText(identity);
-  const hasMap = Boolean(embedUrl);
+  const coords = point
+    ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
+    : getCoordinateText(identity);
+  const hasMap = Boolean(point);
 
-  frame.src = hasMap ? embedUrl : "about:blank";
-  frame.classList.toggle("is-ready", hasMap);
+  initMapPicker();
+  if (point) syncMapPicker(point, shouldZoom);
+  mapPicker.classList.toggle("is-ready", Boolean(state.map.ready));
   placeholder.classList.toggle("is-hidden", hasMap);
-  status.textContent = hasMap ? getMapVerificationText(identity) : "等待生成";
+  status.textContent = hasMap
+    ? state.currentIdentity && identity === state.currentIdentity
+      ? getMapVerificationText(identity)
+      : `已选择坐标 · ${coords}`
+    : "等待生成";
   button.disabled = !mapUrl;
   button.dataset.url = mapUrl;
   if (osmButton) {
@@ -2207,6 +2440,7 @@ function init() {
   updateStateVisibility();
   updateProxyVisibility();
   updateSettingsSummary();
+  initMapPicker();
 
   $("generateBtn").addEventListener("click", handleGenerate);
   $("openMapBtn").addEventListener("click", () => {
