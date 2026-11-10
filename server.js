@@ -118,6 +118,326 @@ const GLOBAL_COUNTRIES = {
       { name: "Guangzhou", lat: 23.1291, lng: 113.2644, radiusKm: 10 },
     ],
   },
+  HK: {
+    name: "Hong Kong",
+    language: "zh-HK",
+    phone: { dial: "852", groups: [4, 4] },
+    centers: [
+      { name: "Central", lat: 22.2819, lng: 114.1588, radiusKm: 3 },
+      { name: "Kowloon", lat: 22.3193, lng: 114.1694, radiusKm: 4 },
+      { name: "Sha Tin", lat: 22.3816, lng: 114.189, radiusKm: 4 },
+    ],
+  },
+  TW: {
+    name: "Taiwan",
+    language: "zh-TW",
+    phone: { dial: "886", groups: [3, 3, 3] },
+    centers: [
+      { name: "Taipei", lat: 25.033, lng: 121.5654, radiusKm: 8 },
+      { name: "Taichung", lat: 24.1477, lng: 120.6736, radiusKm: 8 },
+      { name: "Kaohsiung", lat: 22.6273, lng: 120.3014, radiusKm: 8 },
+    ],
+  },
+  MO: {
+    name: "Macao",
+    language: "zh-HK",
+    phone: { dial: "853", groups: [4, 4] },
+    centers: [
+      { name: "Macau", lat: 22.193, lng: 113.543, radiusKm: 2 },
+      { name: "Taipa", lat: 22.155, lng: 113.559, radiusKm: 2 },
+    ],
+  },
+  IT: {
+    name: "Italy",
+    language: "it",
+    phone: { dial: "39", groups: [3, 3, 4] },
+    centers: [
+      { name: "Rome", lat: 41.9028, lng: 12.4964, radiusKm: 10 },
+      { name: "Milan", lat: 45.4642, lng: 9.19, radiusKm: 8 },
+      { name: "Naples", lat: 40.8518, lng: 14.2681, radiusKm: 8 },
+    ],
+  },
+  ES: {
+    name: "Spain",
+    language: "es",
+    phone: { dial: "34", groups: [3, 3, 3] },
+    centers: [
+      { name: "Madrid", lat: 40.4168, lng: -3.7038, radiusKm: 10 },
+      { name: "Barcelona", lat: 41.3874, lng: 2.1686, radiusKm: 8 },
+      { name: "Valencia", lat: 39.4699, lng: -0.3763, radiusKm: 7 },
+    ],
+  },
+  NL: {
+    name: "Netherlands",
+    language: "nl",
+    phone: { dial: "31", groups: [2, 3, 4] },
+    centers: [
+      { name: "Amsterdam", lat: 52.3676, lng: 4.9041, radiusKm: 8 },
+      { name: "Rotterdam", lat: 51.9244, lng: 4.4777, radiusKm: 8 },
+      { name: "The Hague", lat: 52.0705, lng: 4.3007, radiusKm: 6 },
+    ],
+  },
+  BE: {
+    name: "Belgium",
+    language: "nl",
+    phone: { dial: "32", groups: [3, 2, 2, 2] },
+    centers: [
+      { name: "Brussels", lat: 50.8503, lng: 4.3517, radiusKm: 7 },
+      { name: "Antwerp", lat: 51.2194, lng: 4.4025, radiusKm: 6 },
+    ],
+  },
+  CH: {
+    name: "Switzerland",
+    language: "de",
+    phone: { dial: "41", groups: [2, 3, 2, 2] },
+    centers: [
+      { name: "Zurich", lat: 47.3769, lng: 8.5417, radiusKm: 6 },
+      { name: "Geneva", lat: 46.2044, lng: 6.1432, radiusKm: 5 },
+      { name: "Bern", lat: 46.948, lng: 7.4474, radiusKm: 5 },
+    ],
+  },
+  AT: {
+    name: "Austria",
+    language: "de",
+    phone: { dial: "43", groups: [3, 3, 4] },
+    centers: [
+      { name: "Vienna", lat: 48.2082, lng: 16.3738, radiusKm: 8 },
+      { name: "Graz", lat: 47.0707, lng: 15.4395, radiusKm: 6 },
+    ],
+  },
+  SE: {
+    name: "Sweden",
+    language: "sv",
+    phone: { dial: "46", groups: [2, 3, 2, 2] },
+    centers: [
+      { name: "Stockholm", lat: 59.3293, lng: 18.0686, radiusKm: 8 },
+      { name: "Gothenburg", lat: 57.7089, lng: 11.9746, radiusKm: 7 },
+    ],
+  },
+  NO: {
+    name: "Norway",
+    language: "nb",
+    phone: { dial: "47", groups: [3, 2, 3] },
+    centers: [
+      { name: "Oslo", lat: 59.9139, lng: 10.7522, radiusKm: 7 },
+      { name: "Bergen", lat: 60.3913, lng: 5.3221, radiusKm: 5 },
+    ],
+  },
+  DK: {
+    name: "Denmark",
+    language: "da",
+    phone: { dial: "45", groups: [2, 2, 2, 2] },
+    centers: [
+      { name: "Copenhagen", lat: 55.6761, lng: 12.5683, radiusKm: 7 },
+      { name: "Aarhus", lat: 56.1629, lng: 10.2039, radiusKm: 6 },
+    ],
+  },
+  FI: {
+    name: "Finland",
+    language: "fi",
+    phone: { dial: "358", groups: [2, 3, 4] },
+    centers: [
+      { name: "Helsinki", lat: 60.1699, lng: 24.9384, radiusKm: 7 },
+    ],
+  },
+  IE: {
+    name: "Ireland",
+    language: "en",
+    phone: { dial: "353", groups: [2, 3, 4] },
+    centers: [
+      { name: "Dublin", lat: 53.3498, lng: -6.2603, radiusKm: 8 },
+      { name: "Cork", lat: 51.8985, lng: -8.4756, radiusKm: 6 },
+    ],
+  },
+  PT: {
+    name: "Portugal",
+    language: "pt",
+    phone: { dial: "351", groups: [3, 3, 3] },
+    centers: [
+      { name: "Lisbon", lat: 38.7223, lng: -9.1393, radiusKm: 8 },
+      { name: "Porto", lat: 41.1579, lng: -8.6291, radiusKm: 6 },
+    ],
+  },
+  PL: {
+    name: "Poland",
+    language: "pl",
+    phone: { dial: "48", groups: [3, 3, 3] },
+    centers: [
+      { name: "Warsaw", lat: 52.2297, lng: 21.0122, radiusKm: 9 },
+      { name: "Krakow", lat: 50.0647, lng: 19.945, radiusKm: 6 },
+    ],
+  },
+  CZ: {
+    name: "Czechia",
+    language: "cs",
+    phone: { dial: "420", groups: [3, 3, 3] },
+    centers: [
+      { name: "Prague", lat: 50.0755, lng: 14.4378, radiusKm: 7 },
+      { name: "Brno", lat: 49.1951, lng: 16.6068, radiusKm: 6 },
+    ],
+  },
+  GR: {
+    name: "Greece",
+    language: "el",
+    phone: { dial: "30", groups: [3, 3, 4] },
+    centers: [
+      { name: "Athens", lat: 37.9838, lng: 23.7275, radiusKm: 8 },
+      { name: "Thessaloniki", lat: 40.6401, lng: 22.9444, radiusKm: 6 },
+    ],
+  },
+  NZ: {
+    name: "New Zealand",
+    language: "en",
+    phone: { dial: "64", groups: [2, 3, 4] },
+    centers: [
+      { name: "Auckland", lat: -36.8509, lng: 174.7645, radiusKm: 10 },
+      { name: "Wellington", lat: -41.2865, lng: 174.7762, radiusKm: 6 },
+      { name: "Christchurch", lat: -43.5321, lng: 172.6362, radiusKm: 8 },
+    ],
+  },
+  IN: {
+    name: "India",
+    language: "en",
+    phone: { dial: "91", groups: [5, 5] },
+    centers: [
+      { name: "Mumbai", lat: 19.076, lng: 72.8777, radiusKm: 12 },
+      { name: "Delhi", lat: 28.6139, lng: 77.209, radiusKm: 12 },
+      { name: "Bengaluru", lat: 12.9716, lng: 77.5946, radiusKm: 10 },
+    ],
+  },
+  TH: {
+    name: "Thailand",
+    language: "th",
+    phone: { dial: "66", groups: [2, 3, 4] },
+    centers: [
+      { name: "Bangkok", lat: 13.7563, lng: 100.5018, radiusKm: 12 },
+      { name: "Chiang Mai", lat: 18.7883, lng: 98.9853, radiusKm: 7 },
+    ],
+  },
+  VN: {
+    name: "Vietnam",
+    language: "vi",
+    phone: { dial: "84", groups: [3, 3, 3] },
+    centers: [
+      { name: "Ho Chi Minh City", lat: 10.8231, lng: 106.6297, radiusKm: 10 },
+      { name: "Hanoi", lat: 21.0278, lng: 105.8342, radiusKm: 8 },
+    ],
+  },
+  MY: {
+    name: "Malaysia",
+    language: "en",
+    phone: { dial: "60", groups: [2, 3, 4] },
+    centers: [
+      { name: "Kuala Lumpur", lat: 3.139, lng: 101.6869, radiusKm: 10 },
+      { name: "George Town", lat: 5.4141, lng: 100.3288, radiusKm: 6 },
+      { name: "Johor Bahru", lat: 1.4927, lng: 103.7414, radiusKm: 7 },
+    ],
+  },
+  ID: {
+    name: "Indonesia",
+    language: "id",
+    phone: { dial: "62", groups: [3, 4, 4] },
+    centers: [
+      { name: "Jakarta", lat: -6.2088, lng: 106.8456, radiusKm: 12 },
+      { name: "Surabaya", lat: -7.2575, lng: 112.7521, radiusKm: 8 },
+      { name: "Bandung", lat: -6.9175, lng: 107.6191, radiusKm: 7 },
+    ],
+  },
+  PH: {
+    name: "Philippines",
+    language: "en",
+    phone: { dial: "63", groups: [3, 3, 4] },
+    centers: [
+      { name: "Manila", lat: 14.5995, lng: 120.9842, radiusKm: 8 },
+      { name: "Quezon City", lat: 14.676, lng: 121.0437, radiusKm: 8 },
+      { name: "Cebu", lat: 10.3157, lng: 123.8854, radiusKm: 7 },
+    ],
+  },
+  MX: {
+    name: "Mexico",
+    language: "es",
+    phone: { dial: "52", groups: [2, 4, 4] },
+    centers: [
+      { name: "Mexico City", lat: 19.4326, lng: -99.1332, radiusKm: 12 },
+      { name: "Guadalajara", lat: 20.6597, lng: -103.3496, radiusKm: 8 },
+      { name: "Monterrey", lat: 25.6866, lng: -100.3161, radiusKm: 8 },
+    ],
+  },
+  BR: {
+    name: "Brazil",
+    language: "pt-BR",
+    phone: { dial: "55", groups: [2, 5, 4] },
+    centers: [
+      { name: "Sao Paulo", lat: -23.5505, lng: -46.6333, radiusKm: 12 },
+      { name: "Rio de Janeiro", lat: -22.9068, lng: -43.1729, radiusKm: 10 },
+      { name: "Brasilia", lat: -15.7975, lng: -47.8919, radiusKm: 10 },
+    ],
+  },
+  AR: {
+    name: "Argentina",
+    language: "es",
+    phone: { dial: "54", groups: [2, 4, 4] },
+    centers: [
+      { name: "Buenos Aires", lat: -34.6037, lng: -58.3816, radiusKm: 12 },
+      { name: "Cordoba", lat: -31.4201, lng: -64.1888, radiusKm: 8 },
+    ],
+  },
+  AE: {
+    name: "United Arab Emirates",
+    language: "en",
+    phone: { dial: "971", groups: [2, 3, 4] },
+    centers: [
+      { name: "Dubai", lat: 25.2048, lng: 55.2708, radiusKm: 10 },
+      { name: "Abu Dhabi", lat: 24.4539, lng: 54.3773, radiusKm: 10 },
+    ],
+  },
+  SA: {
+    name: "Saudi Arabia",
+    language: "ar",
+    phone: { dial: "966", groups: [2, 3, 4] },
+    centers: [
+      { name: "Riyadh", lat: 24.7136, lng: 46.6753, radiusKm: 12 },
+      { name: "Jeddah", lat: 21.4858, lng: 39.1925, radiusKm: 10 },
+    ],
+  },
+  TR: {
+    name: "Turkey",
+    language: "tr",
+    phone: { dial: "90", groups: [3, 3, 2, 2] },
+    centers: [
+      { name: "Istanbul", lat: 41.0082, lng: 28.9784, radiusKm: 12 },
+      { name: "Ankara", lat: 39.9334, lng: 32.8597, radiusKm: 10 },
+      { name: "Izmir", lat: 38.4237, lng: 27.1428, radiusKm: 8 },
+    ],
+  },
+  IL: {
+    name: "Israel",
+    language: "he",
+    phone: { dial: "972", groups: [2, 3, 4] },
+    centers: [
+      { name: "Tel Aviv", lat: 32.0853, lng: 34.7818, radiusKm: 7 },
+      { name: "Jerusalem", lat: 31.7683, lng: 35.2137, radiusKm: 6 },
+    ],
+  },
+  ZA: {
+    name: "South Africa",
+    language: "en",
+    phone: { dial: "27", groups: [2, 3, 4] },
+    centers: [
+      { name: "Johannesburg", lat: -26.2041, lng: 28.0473, radiusKm: 12 },
+      { name: "Cape Town", lat: -33.9249, lng: 18.4241, radiusKm: 10 },
+      { name: "Durban", lat: -29.8587, lng: 31.0218, radiusKm: 8 },
+    ],
+  },
+  EG: {
+    name: "Egypt",
+    language: "ar",
+    phone: { dial: "20", groups: [2, 4, 4] },
+    centers: [
+      { name: "Cairo", lat: 30.0444, lng: 31.2357, radiusKm: 12 },
+      { name: "Alexandria", lat: 31.2001, lng: 29.9187, radiusKm: 8 },
+    ],
+  },
 };
 const GLOBAL_NAME_DB = {
   first: ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Chris", "Jamie"],
@@ -134,9 +454,43 @@ const FAKER_LOCALE_BY_COUNTRY = {
   KR: "fakerKO",
   SG: "fakerEN",
   CN: "fakerZH_CN",
+  HK: "fakerEN_HK",
+  TW: "fakerZH_TW",
+  MO: "fakerZH_TW",
+  IT: "fakerIT",
+  ES: "fakerES",
+  NL: "fakerNL",
+  BE: "fakerNL_BE",
+  CH: "fakerDE_CH",
+  AT: "fakerDE_AT",
+  SE: "fakerSV",
+  NO: "fakerNB_NO",
+  DK: "fakerDA",
+  FI: "fakerFI",
+  IE: "fakerEN_IE",
+  PT: "fakerPT_PT",
+  PL: "fakerPL",
+  CZ: "fakerCS_CZ",
+  GR: "fakerEL",
+  NZ: "fakerEN",
+  IN: "fakerEN_IN",
+  TH: "fakerTH",
+  VN: "fakerVI",
+  MY: "fakerEN",
+  ID: "fakerID_ID",
+  PH: "fakerEN",
+  MX: "fakerES_MX",
+  BR: "fakerPT_BR",
+  AR: "fakerES",
+  AE: "fakerAR",
+  SA: "fakerAR",
+  TR: "fakerTR",
+  IL: "fakerHE",
+  ZA: "fakerEN_ZA",
+  EG: "fakerAR",
 };
-const NAME_WITHOUT_SPACE_COUNTRIES = new Set(["CN", "JP", "KR"]);
-const EAST_ASIAN_COUNTRIES = new Set(["CN", "JP", "KR"]);
+const NAME_WITHOUT_SPACE_COUNTRIES = new Set(["CN", "JP", "KR", "MO", "TW"]);
+const EAST_ASIAN_COUNTRIES = new Set(["CN", "HK", "JP", "KR", "MO", "TW"]);
 const EMAIL_DOMAINS = [
   "gmail.com",
   "outlook.com",
@@ -1064,13 +1418,26 @@ function hasStreetLevelAddress(address) {
   );
 }
 
-function resolveValidatedGlobalPoint(requestedPoint, raw, expectedCountryCode) {
-  const address = raw?.address || {};
-  const responseCountryCode = String(address.country_code || "")
+function matchesGlobalCountry(address, expectedCountryCode) {
+  const responseCountryCode = String(address?.country_code || "")
     .trim()
     .toUpperCase();
-  if (!responseCountryCode || responseCountryCode !== expectedCountryCode)
-    return null;
+  const expected = String(expectedCountryCode || "")
+    .trim()
+    .toUpperCase();
+  if (!responseCountryCode || !expected) return false;
+  if (responseCountryCode === expected) return true;
+  const isoCode = ["ISO3166-2-lvl3", "ISO3166-2-lvl4", "ISO3166-2-lvl5"]
+    .map((key) => String(address?.[key] || "").trim().toUpperCase())
+    .find(Boolean);
+  if (expected === "HK") return responseCountryCode === "CN" && isoCode === "CN-HK";
+  if (expected === "MO") return responseCountryCode === "CN" && isoCode === "CN-MO";
+  return false;
+}
+
+function resolveValidatedGlobalPoint(requestedPoint, raw, expectedCountryCode) {
+  const address = raw?.address || {};
+  if (!matchesGlobalCountry(address, expectedCountryCode)) return null;
   if (isWaterLike(raw) || isCoarseAreaResult(raw)) return null;
   if (Number(raw.place_rank || 0) < MIN_STREET_LEVEL_PLACE_RANK) return null;
   if (!hasStreetLevelAddress(address)) return null;
@@ -1306,10 +1673,15 @@ function normalizeGlobalIdentity(raw, countryCode, point) {
     getNominatimAddressPart(address, ["state", "region", "province", "county"]),
   );
   const zip = String(address.postcode || "").trim();
+  const responseCountryCode = String(address.country_code || "")
+    .trim()
+    .toUpperCase();
   const countryName =
-    toTitleCaseText(address.country) ||
-    GLOBAL_COUNTRIES[countryCode]?.name ||
-    countryCode;
+    responseCountryCode === countryCode
+      ? toTitleCaseText(address.country) ||
+        GLOBAL_COUNTRIES[countryCode]?.name ||
+        countryCode
+      : GLOBAL_COUNTRIES[countryCode]?.name || countryCode;
 
   if (!road || !city) throw new Error("全球地图源缺少街道或城市字段");
 

@@ -83,6 +83,40 @@ const GLOBAL_COUNTRIES = [
   { code: "KR", name: "South Korea" },
   { code: "SG", name: "Singapore" },
   { code: "CN", name: "China" },
+  { code: "HK", name: "Hong Kong" },
+  { code: "TW", name: "Taiwan" },
+  { code: "MO", name: "Macao" },
+  { code: "IT", name: "Italy" },
+  { code: "ES", name: "Spain" },
+  { code: "NL", name: "Netherlands" },
+  { code: "BE", name: "Belgium" },
+  { code: "CH", name: "Switzerland" },
+  { code: "AT", name: "Austria" },
+  { code: "SE", name: "Sweden" },
+  { code: "NO", name: "Norway" },
+  { code: "DK", name: "Denmark" },
+  { code: "FI", name: "Finland" },
+  { code: "IE", name: "Ireland" },
+  { code: "PT", name: "Portugal" },
+  { code: "PL", name: "Poland" },
+  { code: "CZ", name: "Czechia" },
+  { code: "GR", name: "Greece" },
+  { code: "NZ", name: "New Zealand" },
+  { code: "IN", name: "India" },
+  { code: "TH", name: "Thailand" },
+  { code: "VN", name: "Vietnam" },
+  { code: "MY", name: "Malaysia" },
+  { code: "ID", name: "Indonesia" },
+  { code: "PH", name: "Philippines" },
+  { code: "MX", name: "Mexico" },
+  { code: "BR", name: "Brazil" },
+  { code: "AR", name: "Argentina" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "SA", name: "Saudi Arabia" },
+  { code: "TR", name: "Turkey" },
+  { code: "IL", name: "Israel" },
+  { code: "ZA", name: "South Africa" },
+  { code: "EG", name: "Egypt" },
 ];
 const USPS_ZIP_PREFIX_RANGES = {
   OR: [[970, 979]],
@@ -2430,6 +2464,200 @@ function populateCountries() {
     option.textContent = `${country.code} - ${country.name}`;
     select.appendChild(option);
   });
+  mountCountryPicker();
+}
+
+function mountCountryPicker() {
+  const select = $("countrySelect");
+  if (!select || select.dataset.prettyMounted === "1") return;
+  select.dataset.prettyMounted = "1";
+  select.classList.add("pretty-source");
+  select.tabIndex = -1;
+
+  const root = document.createElement("div");
+  root.className = "pretty-select";
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "pretty-select-trigger";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  const menu = document.createElement("div");
+  menu.className = "pretty-select-menu";
+  menu.hidden = true;
+  menu.setAttribute("role", "listbox");
+  root.append(trigger, menu);
+  select.insertAdjacentElement("afterend", root);
+
+  let highlight = 0;
+
+  function optionButtons() {
+    return [...menu.querySelectorAll(".pretty-select-option")];
+  }
+
+  function sync() {
+    const selected = select.selectedOptions[0];
+    trigger.textContent = selected ? selected.textContent : "请选择";
+    optionButtons().forEach((item) => {
+      const active = item.dataset.value === select.value;
+      item.classList.toggle("is-selected", active);
+      item.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function render() {
+    menu.replaceChildren();
+    [...select.options].forEach((option, index) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "pretty-select-option";
+      item.textContent = option.textContent;
+      item.dataset.value = option.value;
+      item.setAttribute("role", "option");
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        choose(index);
+      });
+      menu.append(item);
+    });
+    sync();
+  }
+
+  function place() {
+    const rect = trigger.getBoundingClientRect();
+    if (
+      rect.width < 8 ||
+      rect.bottom <= 0 ||
+      rect.top >= window.innerHeight ||
+      rect.right <= 0 ||
+      rect.left >= window.innerWidth
+    ) {
+      closeMenu();
+      return;
+    }
+    if (menu.parentElement !== document.body) document.body.append(menu);
+    const margin = 8;
+    const below = window.innerHeight - rect.bottom - margin;
+    const above = rect.top - margin;
+    const openUp = below < 160 && above > below;
+    const maxHeight = Math.max(140, Math.min(280, openUp ? above : below));
+    menu.style.left = `${Math.round(rect.left)}px`;
+    menu.style.width = `${Math.round(rect.width)}px`;
+    menu.style.maxHeight = `${Math.round(maxHeight)}px`;
+    if (openUp) {
+      menu.style.top = "auto";
+      menu.style.bottom = `${Math.round(window.innerHeight - rect.top + 4)}px`;
+    } else {
+      menu.style.bottom = "auto";
+      menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+    }
+  }
+
+  function setHighlight(index, shouldScroll) {
+    const items = optionButtons();
+    if (!items.length) return;
+    highlight = Math.max(0, Math.min(items.length - 1, index));
+    items.forEach((item, itemIndex) => {
+      item.classList.toggle("is-highlight", itemIndex === highlight);
+    });
+    if (shouldScroll) items[highlight].scrollIntoView({ block: "nearest" });
+  }
+
+  function openMenu() {
+    if (select.disabled) return;
+    render();
+    menu.hidden = false;
+    root.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+    place();
+    const selectedIndex = Math.max(
+      0,
+      [...select.options].findIndex((option) => option.value === select.value),
+    );
+    setHighlight(selectedIndex, true);
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+    root.classList.remove("is-open");
+    trigger.setAttribute("aria-expanded", "false");
+  }
+
+  function choose(index) {
+    const option = select.options[index];
+    if (!option) return;
+    select.value = option.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    sync();
+    closeMenu();
+    trigger.focus();
+  }
+
+  trigger.addEventListener("click", (event) => {
+    if (event.detail === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (menu.hidden) openMenu();
+    else closeMenu();
+  });
+  trigger.addEventListener("keydown", (event) => {
+    if (menu.hidden) {
+      if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlight(highlight + 1, true);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlight(highlight - 1, true);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setHighlight(0, true);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setHighlight(optionButtons().length - 1, true);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      choose(highlight);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu();
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (!root.contains(event.target) && !menu.contains(event.target)) closeMenu();
+  });
+  window.addEventListener("resize", () => {
+    if (!menu.hidden) place();
+  });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!menu.hidden) place();
+    },
+    true,
+  );
+
+  const valueDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  );
+  Object.defineProperty(select, "value", {
+    configurable: true,
+    get() {
+      return valueDescriptor.get.call(this);
+    },
+    set(next) {
+      valueDescriptor.set.call(this, next);
+      sync();
+    },
+  });
+
+  render();
 }
 
 function updateStateVisibility() {
