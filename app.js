@@ -785,11 +785,254 @@ function enrichIdentity(identity) {
   if (!identity) return identity;
   const gender = identity.gender || getGenderFromName(identity.name);
   const birthday = identity.birthday || generateBirthday();
+  const countryCode = getIdentityCountryCode(identity);
+  const card = identity.cardNumber
+    ? null
+    : generateRegionalCard(countryCode);
   return {
     ...identity,
+    countryCode: identity.countryCode || countryCode,
     gender,
     birthday,
     password: identity.password || generatePassword(),
+    cardBrand: identity.cardBrand || card?.cardBrand || "",
+    cardNumber: identity.cardNumber || card?.cardNumber || "",
+  };
+}
+
+const REGIONAL_CARD_ISSUERS = {
+  US: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "American Express", length: 15, prefixes: ["34", "37"] },
+    { brand: "Discover", length: 16, prefixes: ["6011", "65"] },
+  ],
+  CA: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "American Express", length: 15, prefixes: ["34", "37"] },
+  ],
+  GB: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  IE: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  AU: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  NZ: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  DE: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  FR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  IT: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  ES: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  PT: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  NL: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  BE: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  CH: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  AT: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  SE: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  NO: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  DK: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  FI: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  PL: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  CZ: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  GR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  JP: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "JCB", length: 16, prefixes: ["3528", "3589"] },
+  ],
+  KR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  SG: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  MY: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  TH: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  VN: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  ID: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  PH: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  MX: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  AR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  ZA: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  EG: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  IL: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  AE: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+  CN: [
+    { brand: "UnionPay", length: 16, prefixes: ["62"] },
+    { brand: "UnionPay", length: 19, prefixes: ["62"] },
+  ],
+  HK: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "UnionPay", length: 16, prefixes: ["62"] },
+  ],
+  MO: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "UnionPay", length: 16, prefixes: ["62"] },
+  ],
+  TW: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "JCB", length: 16, prefixes: ["3528"] },
+  ],
+  IN: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "RuPay", length: 16, prefixes: ["60", "65", "81", "82"] },
+  ],
+  BR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "Elo", length: 16, prefixes: ["5067", "5090", "6504"] },
+    { brand: "Hipercard", length: 16, prefixes: ["606282"] },
+  ],
+  SA: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "mada", length: 16, prefixes: ["4", "5"] },
+  ],
+  TR: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+    { brand: "Troy", length: 16, prefixes: ["9792"] },
+  ],
+  DEFAULT: [
+    { brand: "Visa", length: 16, prefixes: ["4"] },
+    { brand: "Mastercard", length: 16, prefixes: ["51", "52", "53", "54", "55"] },
+  ],
+};
+
+function randomDigits(count) {
+  return Array.from({ length: count }, () => Math.floor(Math.random() * 10)).join("");
+}
+
+function luhnCheckDigit(body) {
+  let sum = 0;
+  let doubleDigit = true;
+  for (let index = body.length - 1; index >= 0; index -= 1) {
+    let digit = Number(body[index]);
+    if (doubleDigit) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    doubleDigit = !doubleDigit;
+  }
+  return String((10 - (sum % 10)) % 10);
+}
+
+function formatCardNumber(number) {
+  if (number.length === 15) {
+    return `${number.slice(0, 4)} ${number.slice(4, 10)} ${number.slice(10)}`;
+  }
+  if (number.length === 19) {
+    return `${number.slice(0, 4)} ${number.slice(4, 8)} ${number.slice(8, 12)} ${number.slice(12, 16)} ${number.slice(16)}`;
+  }
+  return number.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function generateRegionalCard(countryCode) {
+  const code = String(countryCode || "US").toUpperCase();
+  const issuers = REGIONAL_CARD_ISSUERS[code] || REGIONAL_CARD_ISSUERS.DEFAULT;
+  const issuer = getRandom(issuers);
+  const prefix = getRandom(issuer.prefixes);
+  const body = `${prefix}${randomDigits(issuer.length - 1 - prefix.length)}`;
+  const number = `${body}${luhnCheckDigit(body)}`;
+  return {
+    cardBrand: issuer.brand,
+    cardNumber: formatCardNumber(number),
   };
 }
 
@@ -1206,8 +1449,6 @@ function saveSettings() {
       stateMode: $("stateModeSelect").value,
       stateCode: $("stateSelect").value,
       countryCode: $("countrySelect").value,
-      fallback: $("fallbackCheck").checked,
-      autoGenerate: $("autoGenerateCheck").checked,
       proxyType: $("proxyTypeSelect").value,
       proxyHost: $("proxyHostInput").value,
       proxyPort: $("proxyPortInput").value,
@@ -1278,15 +1519,18 @@ function updateProxyVisibility() {
   badge.classList.add("is-active");
 }
 
-function getStateModeLabel() {
-  if ($("sourceSelect").value === ADDRESS_SOURCE.GLOBAL) {
-    return getGlobalCountryName($("countrySelect").value);
-  }
+function getRegionLabel() {
+  const country = String($("countrySelect").value || "US").toUpperCase();
+  if (country !== "US") return "全域随机";
   const mode = $("stateModeSelect").value;
-  let label = "免税州";
-  if (mode === "specific")
-    label = `指定州 · ${$("stateSelect").value || "OR"}`;
-  else if (mode === "mixed") label = "混合州";
+  if (mode === "specific") return getStateNameByCode($("stateSelect").value || "OR");
+  if (mode === "mixed") return "随机州";
+  return "免税州";
+}
+
+function getStateModeLabel() {
+  const countryName = getGlobalCountryName($("countrySelect").value);
+  let label = `${countryName} · ${getRegionLabel()}`;
   if ($("sourceSelect").value !== ADDRESS_SOURCE.OSM_HOUSE) return label;
   const type = $("osmTypeSelect")?.value || "residential";
   const typeLabel =
@@ -1299,12 +1543,6 @@ function updateSettingsSummary() {
     $("sourceSelect").value,
   );
   $("settingsStateBadge").textContent = getStateModeLabel();
-  $("settingsFallbackBadge").textContent = $("fallbackCheck").checked
-    ? "自动回退"
-    : "不回退";
-  $("settingsAutoBadge").textContent = $("autoGenerateCheck").checked
-    ? "自动生成"
-    : "手动生成";
 
   const proxyType = $("proxyTypeSelect").value;
   if (proxyType === "direct") {
@@ -1923,31 +2161,48 @@ async function fetchIdentityFromNominatim() {
   throw lastError || new Error("Nominatim 未返回可用地址");
 }
 
-async function generateIdentity() {
-  const source = $("sourceSelect").value;
+async function fetchIdentityBySource(source) {
+  if (source === ADDRESS_SOURCE.LOCAL) return fetchIdentityFromLocalSource();
+  if (source === ADDRESS_SOURCE.OSM_HOUSE) return fetchIdentityFromOsmHouse();
+  if (source === ADDRESS_SOURCE.REAL) return fetchIdentityFromRealAddressApi();
+  if (source === ADDRESS_SOURCE.FAKE) return fetchIdentityFromFakeAddressApi();
+  if (source === ADDRESS_SOURCE.NOMINATIM) return fetchIdentityFromNominatim();
+  if (source === ADDRESS_SOURCE.GLOBAL) return fetchIdentityFromGlobalSource();
   if (source === ADDRESS_SOURCE.ORIGINAL) return generateFallbackIdentity();
+  throw new Error("未知地址来源");
+}
 
-  try {
-    if (source === ADDRESS_SOURCE.LOCAL)
-      return await fetchIdentityFromLocalSource();
-    if (source === ADDRESS_SOURCE.OSM_HOUSE)
-      return await fetchIdentityFromOsmHouse();
-    if (source === ADDRESS_SOURCE.REAL)
-      return await fetchIdentityFromRealAddressApi();
-    if (source === ADDRESS_SOURCE.FAKE)
-      return await fetchIdentityFromFakeAddressApi();
-    if (source === ADDRESS_SOURCE.NOMINATIM)
-      return await fetchIdentityFromNominatim();
-    if (source === ADDRESS_SOURCE.GLOBAL)
-      return await fetchIdentityFromGlobalSource();
-    return generateFallbackIdentity();
-  } catch (error) {
-    if (!$("fallbackCheck").checked) throw error;
-    const id = generateFallbackIdentity();
-    id.fallbackSource = source;
-    id.fallbackError = error.message || String(error);
-    return id;
+function fallbackSourceOrder(selected) {
+  const available = availableSources($("countrySelect").value)
+    .map((item) => item.value)
+    .filter((value) => value !== ADDRESS_SOURCE.ORIGINAL);
+  const preferred = available.includes(selected) ? selected : available[0];
+  const rest = available.filter((value) => value !== preferred);
+  return [preferred, ...rest, ADDRESS_SOURCE.ORIGINAL].filter(Boolean);
+}
+
+async function generateIdentity() {
+  const selected = $("sourceSelect").value;
+  const order = fallbackSourceOrder(selected);
+  const failures = [];
+  let lastError = null;
+
+  for (const source of order) {
+    try {
+      const identity = await fetchIdentityBySource(source);
+      if (source !== selected) {
+        identity.fallbackSource = selected;
+        identity.fallbackUsed = source;
+        identity.fallbackError = failures.join("；");
+      }
+      return identity;
+    } catch (error) {
+      lastError = error;
+      failures.push(getSourceLabel(source));
+    }
   }
+
+  throw lastError || new Error("没有可用地址来源");
 }
 
 function getSourceLabel(source) {
@@ -1981,9 +2236,13 @@ function getSourceLabel(source) {
 
 function getFallbackNotice(identity) {
   if (!identity?.fallbackSource) return "";
-  const reason = String(identity.fallbackError || "").trim();
-  const prefix = `${getSourceLabel(identity.fallbackSource)}不可用，已回退到原始本地逻辑`;
-  return reason ? `${prefix}：${reason}` : prefix;
+  const from = getSourceLabel(identity.fallbackSource);
+  const used = getSourceLabel(identity.fallbackUsed || identity.source);
+  const skipped = String(identity.fallbackError || "")
+    .split("；")
+    .filter((item) => item && item !== from);
+  const failed = [from, ...skipped].filter((item, index, list) => list.indexOf(item) === index);
+  return `${failed.join("、")}不可用，已按来源顺序改用${used}`;
 }
 
 function getSourceSiteUrl(source) {
@@ -2266,6 +2525,7 @@ function toCopyText(id) {
         .join(" · "),
       id.email,
       id.password,
+      id.cardNumber,
       id.phone,
       formatFullAddress(id),
     ]
@@ -2278,6 +2538,7 @@ function toCopyText(id) {
     [id.birthday, getAgeFromBirthday(id.birthday)].filter(Boolean).join(" · "),
     id.email,
     id.password,
+    id.cardNumber,
     id.phone,
     id.line1,
     id.line2,
@@ -2296,6 +2557,7 @@ function getFieldCopyValue(key, id) {
     email: id.email,
     phone: id.phone,
     password: id.password,
+    card: id.cardNumber,
     birthday: [id.birthday, getAgeFromBirthday(id.birthday)]
       .filter(Boolean)
       .join(" · "),
@@ -2321,16 +2583,11 @@ function setText(id, value) {
 
 function getConfidenceText(id) {
   if (!id) return "-";
-  const label = id.confidenceLabel || "未评估";
-  if (id.source === ADDRESS_SOURCE.GLOBAL) {
-    return `${label} · 街道级地图校验`;
-  }
-  if (id.source === ADDRESS_SOURCE.OSM_HOUSE) {
-    const zipText = id.zipStateVerified ? "ZIP/州一致" : "ZIP/州未验证";
-    return `${label} · 已知门牌 · ${zipText}`;
-  }
-  const zipText = id.zipStateVerified ? "ZIP/州一致" : "ZIP/州未验证";
-  return `${label} · ${zipText}`;
+  if (id.confidenceLabel) return id.confidenceLabel;
+  if (id.confidence === "high") return "高";
+  if (id.confidence === "medium") return "中";
+  if (id.confidence === "low") return "低";
+  return "-";
 }
 
 function getMapVerificationText(id) {
@@ -2373,6 +2630,8 @@ function renderIdentity(id) {
   setText("emailValue", id.email);
   setText("phoneValue", id.phone);
   setText("passwordValue", id.password);
+  setText("cardLabel", id.cardBrand ? `信用卡 · ${id.cardBrand}` : "信用卡");
+  setText("cardValue", id.cardNumber);
   setText(
     "birthdayValue",
     [id.birthday, getAgeFromBirthday(id.birthday)].filter(Boolean).join(" · "),
@@ -2464,11 +2723,12 @@ function populateCountries() {
     option.textContent = `${country.code} - ${country.name}`;
     select.appendChild(option);
   });
-  mountCountryPicker();
 }
 
-function mountCountryPicker() {
-  const select = $("countrySelect");
+
+const prettyMenuClosers = [];
+
+function mountPrettySelect(select) {
   if (!select || select.dataset.prettyMounted === "1") return;
   select.dataset.prettyMounted = "1";
   select.classList.add("pretty-source");
@@ -2564,7 +2824,10 @@ function mountCountryPicker() {
   }
 
   function openMenu() {
-    if (select.disabled) return;
+    if (select.disabled || select.classList.contains("is-hidden")) return;
+    prettyMenuClosers.forEach((close) => {
+      if (close !== closeMenu) close();
+    });
     render();
     menu.hidden = false;
     root.classList.add("is-open");
@@ -2657,17 +2920,58 @@ function mountCountryPicker() {
     },
   });
 
+  prettyMenuClosers.push(closeMenu);
   render();
 }
 
+function mountAllPrettySelects() {
+  document.querySelectorAll("select").forEach((select) => mountPrettySelect(select));
+}
+
+const SOURCE_CATALOG = [
+  { value: ADDRESS_SOURCE.LOCAL, label: "本地源（默认）", usOnly: true },
+  { value: ADDRESS_SOURCE.OSM_HOUSE, label: "OSM 门牌源", usOnly: true },
+  { value: ADDRESS_SOURCE.REAL, label: "真实地址接口", usOnly: true },
+  { value: ADDRESS_SOURCE.FAKE, label: "fakeaddressgenerator", usOnly: true },
+  { value: ADDRESS_SOURCE.NOMINATIM, label: "Nominatim Reverse", usOnly: true },
+  { value: ADDRESS_SOURCE.GLOBAL, label: "全球地图源", usOnly: false },
+];
+
+function availableSources(countryCode) {
+  const isUs = String(countryCode || "US").toUpperCase() === "US";
+  return SOURCE_CATALOG.filter((item) => isUs || !item.usOnly);
+}
+
+function syncSourceOptions(preferredSource = "") {
+  const select = $("sourceSelect");
+  const country = String($("countrySelect").value || "US").toUpperCase();
+  const options = availableSources(country);
+  const current = preferredSource || select.value;
+  const next = options.some((item) => item.value === current)
+    ? current
+    : options[0]?.value || ADDRESS_SOURCE.GLOBAL;
+  select.replaceChildren(
+    ...options.map((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      return option;
+    }),
+  );
+  select.value = next;
+}
+
 function updateStateVisibility() {
+  syncSourceOptions();
+  const country = String($("countrySelect").value || "US").toUpperCase();
+  const isUs = country === "US";
   const source = $("sourceSelect").value;
-  const isGlobal = source === ADDRESS_SOURCE.GLOBAL;
-  $("countryWrap").classList.toggle("is-hidden", !isGlobal);
-  $("stateModeWrap").classList.toggle("is-hidden", isGlobal);
+  $("countryWrap").classList.remove("is-hidden");
+  $("stateModeSelect").classList.toggle("is-hidden", !isUs);
+  $("regionFixedNote")?.classList.toggle("is-hidden", isUs);
   $("stateWrap").classList.toggle(
     "is-hidden",
-    isGlobal || $("stateModeSelect").value !== "specific",
+    !isUs || $("stateModeSelect").value !== "specific",
   );
   $("osmTypeWrap")?.classList.toggle(
     "is-hidden",
@@ -2679,20 +2983,28 @@ function refreshSettingsUi() {
   updateStateVisibility();
   updateProxyVisibility();
   updateSettingsSummary();
+  mountAllPrettySelects();
   saveSettings();
 }
 
 function handleQuickCountry(countryCode) {
-  $("sourceSelect").value = ADDRESS_SOURCE.GLOBAL;
   $("countrySelect").value = countryCode;
+  syncSourceOptions(
+    String(countryCode).toUpperCase() === "US"
+      ? ADDRESS_SOURCE.LOCAL
+      : ADDRESS_SOURCE.GLOBAL,
+  );
   refreshSettingsUi();
   handleGenerate();
 }
 
 function handleQuickState(stateCode) {
-  if ($("sourceSelect").value === ADDRESS_SOURCE.GLOBAL) {
-    $("sourceSelect").value = ADDRESS_SOURCE.LOCAL;
-  }
+  $("countrySelect").value = "US";
+  syncSourceOptions(
+    $("sourceSelect").value === ADDRESS_SOURCE.GLOBAL
+      ? ADDRESS_SOURCE.LOCAL
+      : $("sourceSelect").value,
+  );
   $("stateModeSelect").value = "specific";
   $("stateSelect").value = stateCode;
   refreshSettingsUi();
@@ -2704,18 +3016,16 @@ function init() {
   populateStates();
   populateCountries();
   const settings = loadSettings();
-  $("sourceSelect").value = settings.source;
+  $("countrySelect").value = settings.countryCode;
   $("stateModeSelect").value = settings.stateMode;
   $("stateSelect").value = settings.stateCode;
-  $("countrySelect").value = settings.countryCode;
+  syncSourceOptions(settings.source);
   if (
     $("osmTypeSelect") &&
     ["residential", "commercial", "any"].includes(settings.osmType)
   ) {
     $("osmTypeSelect").value = settings.osmType;
   }
-  $("fallbackCheck").checked = settings.fallback;
-  $("autoGenerateCheck").checked = settings.autoGenerate;
   $("proxyTypeSelect").value = settings.proxyType;
   $("proxyHostInput").value = settings.proxyHost;
   $("proxyPortInput").value = settings.proxyPort;
@@ -2724,6 +3034,7 @@ function init() {
   updateStateVisibility();
   updateProxyVisibility();
   updateSettingsSummary();
+  mountAllPrettySelects();
   initMapPicker();
 
   $("generateBtn").addEventListener("click", handleGenerate);
@@ -2792,8 +3103,6 @@ function init() {
     "countrySelect",
     "stateModeSelect",
     "stateSelect",
-    "fallbackCheck",
-    "autoGenerateCheck",
     "proxyTypeSelect",
     "proxyHostInput",
     "proxyPortInput",
@@ -2810,7 +3119,7 @@ function init() {
   updateSourceButton("");
   updateMapButton(null);
   renderHistory();
-  if (settings.autoGenerate) window.setTimeout(() => handleGenerate(), 80);
+  window.setTimeout(() => handleGenerate(), 80);
 }
 
 init();

@@ -45,46 +45,27 @@
               </div>
             </div>
             <div class="settings-summary-meta">
-              <span id="settingsSourceBadge" class="settings-mini-badge"></span>
               <span id="settingsStateBadge" class="settings-mini-badge"></span>
+              <span id="settingsSourceBadge" class="settings-mini-badge"></span>
               <span id="settingsProxyBadge" class="settings-mini-badge"></span>
-              <span
-                id="settingsFallbackBadge"
-                class="settings-mini-badge"
-              ></span>
-              <span id="settingsAutoBadge" class="settings-mini-badge"></span>
             </div>
           </summary>
 
           <div class="settings-body">
             <div class="controls-main">
-              <label class="field-card">
-                <span class="field-label">地址来源</span>
-                <select id="sourceSelect">
-                  <option value="local">本地源（默认）</option>
-                  <option value="osm-house">OSM 门牌源</option>
-                  <option value="real">真实地址接口</option>
-                  <option value="original">原始本地逻辑</option>
-                  <option value="fake">fakeaddressgenerator</option>
-                  <option value="nominatim">Nominatim Reverse</option>
-                  <option value="global">全球地图源</option>
-                </select>
-              </label>
-
-              <div id="countryWrap" class="field-card is-hidden">
-                <span class="field-label">国家 / 地区</span>
+              <div id="countryWrap" class="field-card">
+                <span class="field-label">国家</span>
                 <select id="countrySelect"></select>
               </div>
 
               <label id="stateModeWrap" class="field-card">
-                <span class="field-label">州范围</span>
+                <span class="field-label">地区</span>
                 <select id="stateModeSelect">
-                  <option value="tax-free">
-                    免税州随机（OR / DE / NH / MT / AK）
-                  </option>
-                  <option value="mixed">混合州随机</option>
+                  <option value="tax-free">免税州</option>
+                  <option value="mixed">随机州</option>
                   <option value="specific">指定州</option>
                 </select>
+                <p id="regionFixedNote" class="region-fixed is-hidden">全域随机</p>
               </label>
 
               <label id="stateWrap" class="field-card is-hidden">
@@ -101,21 +82,18 @@
                 </select>
               </label>
 
-              <label class="check-card">
-                <input id="fallbackCheck" type="checkbox" checked />
-                <span>
-                  <strong>自动回退</strong>
-                  <small>当前源失败时，自动切回原始本地逻辑</small>
-                </span>
+              <label class="field-card">
+                <span class="field-label">地址来源</span>
+                <select id="sourceSelect">
+                  <option value="local">本地源（默认）</option>
+                  <option value="osm-house">OSM 门牌源</option>
+                  <option value="real">真实地址接口</option>
+                  <option value="fake">fakeaddressgenerator</option>
+                  <option value="nominatim">Nominatim Reverse</option>
+                  <option value="global">全球地图源</option>
+                </select>
               </label>
 
-              <label class="check-card">
-                <input id="autoGenerateCheck" type="checkbox" checked />
-                <span>
-                  <strong>打开后自动生成</strong>
-                  <small>进入页面后自动生成第一条地址</small>
-                </span>
-              </label>
             </div>
 
             <div class="quick-panel" aria-label="快捷生成">
@@ -130,6 +108,7 @@
                 <button type="button" data-quick-country="GB">英国</button>
                 <button type="button" data-quick-country="JP">日本</button>
                 <button type="button" data-quick-country="SG">新加坡</button>
+                <button type="button" data-quick-country="HK">香港</button>
                 <button type="button" data-quick-state="OR">俄勒冈免税</button>
                 <button type="button" data-quick-state="DE">特拉华免税</button>
                 <button type="button" data-quick-state="NH">新罕布什尔</button>
@@ -261,6 +240,24 @@
               </div>
               <div
                 class="copyable-field"
+                data-copy-key="birthday"
+                role="button"
+                tabindex="0"
+                title="点击复制生日"
+              >
+                <span>生日 / 年龄</span><strong id="birthdayValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
+                data-copy-key="gender"
+                role="button"
+                tabindex="0"
+                title="点击复制性别"
+              >
+                <span>性别</span><strong id="genderValue">-</strong>
+              </div>
+              <div
+                class="copyable-field"
                 data-copy-key="email"
                 role="button"
                 tabindex="0"
@@ -288,21 +285,12 @@
               </div>
               <div
                 class="copyable-field"
-                data-copy-key="birthday"
+                data-copy-key="card"
                 role="button"
                 tabindex="0"
-                title="点击复制生日"
+                title="点击复制信用卡号"
               >
-                <span>生日 / 年龄</span><strong id="birthdayValue">-</strong>
-              </div>
-              <div
-                class="copyable-field"
-                data-copy-key="gender"
-                role="button"
-                tabindex="0"
-                title="点击复制性别"
-              >
-                <span>性别</span><strong id="genderValue">-</strong>
+                <span id="cardLabel">信用卡</span><strong id="cardValue">-</strong>
               </div>
               <div
                 class="copyable-field"

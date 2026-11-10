@@ -2599,6 +2599,15 @@ textarea,
   }
 }
 
+.region-fixed {
+  margin-top: 0.42rem;
+  min-height: 34px;
+  padding: 0.62rem 0.78rem;
+  border: 1px solid rgba(146, 64, 14, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+}
+
 
 .pretty-source {
   position: absolute !important;
@@ -2717,4 +2726,40 @@ textarea,
 
 .pretty-select-option.is-selected {
   background: rgba(249, 115, 22, 0.16);
+}
+
+select.pretty-source.is-hidden + .pretty-select {
+  display: none;
+}
+
+.proxy-header {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.proxy-header > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.proxy-header::-webkit-details-marker,
+.proxy-header::marker {
+  display: none;
+  content: "";
+}
+
+.proxy-status-badge {
+  margin-left: auto;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.proxy-header::after {
+  margin-left: 8px;
+  flex: 0 0 auto;
+  align-self: center;
+  line-height: 1;
 }
