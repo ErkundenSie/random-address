@@ -1,5 +1,6 @@
 const ADDRESS_SOURCE = {
   LOCAL: "local",
+  OSM_HOUSE: "osm-house",
   REAL: "real",
   ORIGINAL: "original",
   FAKE: "fake",
@@ -20,6 +21,8 @@ const SOURCE_SITE_URLS = {
   fakeaddressgenerator: "https://fakeaddressgenerator.click/zh",
   nominatim: "https://nominatim.openstreetmap.org/ui/reverse.html",
   global: "https://github.com/YeShengDe/AddressGeneratorFe",
+  osmHouse:
+    "https://github.com/jiangnan1224/AddressGenerator/tree/feature/real-addresses",
 };
 const LOCAL_SERVER_HINT =
   "接口源需要通过本地服务打开：运行 start-local.bat，或在此目录执行 node server.js 后访问 http://127.0.0.1:8787";
@@ -951,6 +954,7 @@ function loadSettings() {
     const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     return {
       source: parsed.source || ADDRESS_SOURCE.LOCAL,
+      osmType: parsed.osmType || "residential",
       stateMode: parsed.stateMode || "tax-free",
       stateCode: parsed.stateCode || "OR",
       countryCode: parsed.countryCode || "US",
@@ -965,6 +969,7 @@ function loadSettings() {
   } catch (error) {
     return {
       source: ADDRESS_SOURCE.LOCAL,
+      osmType: "residential",
       stateMode: "tax-free",
       stateCode: "OR",
       countryCode: "US",
@@ -1163,6 +1168,7 @@ function saveSettings() {
     SETTINGS_KEY,
     JSON.stringify({
       source: $("sourceSelect").value,
+      osmType: $("osmTypeSelect")?.value || "residential",
       stateMode: $("stateModeSelect").value,
       stateCode: $("stateSelect").value,
       countryCode: $("countrySelect").value,
@@ -1243,9 +1249,15 @@ function getStateModeLabel() {
     return getGlobalCountryName($("countrySelect").value);
   }
   const mode = $("stateModeSelect").value;
-  if (mode === "specific") return `指定州 · ${$("stateSelect").value || "OR"}`;
-  if (mode === "mixed") return "混合州";
-  return "免税州";
+  let label = "免税州";
+  if (mode === "specific")
+    label = `指定州 · ${$("stateSelect").value || "OR"}`;
+  else if (mode === "mixed") label = "混合州";
+  if ($("sourceSelect").value !== ADDRESS_SOURCE.OSM_HOUSE) return label;
+  const type = $("osmTypeSelect")?.value || "residential";
+  const typeLabel =
+    type === "commercial" ? "商业" : type === "any" ? "不限" : "住宅";
+  return `${label} · ${typeLabel}`;
 }
 
 function updateSettingsSummary() {
@@ -1528,6 +1540,27 @@ async function fetchIdentityFromLocalSource() {
     8500,
   );
   return normalizeLocalSourceIdentity(data, stateCode);
+}
+
+async function fetchIdentityFromOsmHouse() {
+  const stateCode = pickStateCode();
+  const type = $("osmTypeSelect")?.value || "residential";
+  const params = new URLSearchParams({ state: stateCode, type });
+  const data = await fetchWithTimeout(
+    getLocalApiUrl(`/api/osm-house?${params.toString()}`),
+    buildLocalApiOptions({ headers: { accept: "application/json" } }),
+    18000,
+  );
+  return normalizeOsmHouseIdentity(data, stateCode);
+}
+
+function normalizeOsmHouseIdentity(raw, expectedStateCode = "") {
+  const identity = normalizeLocalSourceIdentity(raw, expectedStateCode);
+  identity.source = ADDRESS_SOURCE.OSM_HOUSE;
+  if (raw.osmUrl) identity.osmUrl = String(raw.osmUrl);
+  if (raw.category) identity.category = String(raw.category);
+  if (raw.placeKind) identity.placeKind = String(raw.placeKind);
+  return identity;
 }
 
 async function fetchIdentityFromGlobalSource() {
@@ -1863,6 +1896,8 @@ async function generateIdentity() {
   try {
     if (source === ADDRESS_SOURCE.LOCAL)
       return await fetchIdentityFromLocalSource();
+    if (source === ADDRESS_SOURCE.OSM_HOUSE)
+      return await fetchIdentityFromOsmHouse();
     if (source === ADDRESS_SOURCE.REAL)
       return await fetchIdentityFromRealAddressApi();
     if (source === ADDRESS_SOURCE.FAKE)
@@ -1887,6 +1922,8 @@ function getSourceLabel(source) {
     .toLowerCase();
   if (source === ADDRESS_SOURCE.LOCAL || raw.startsWith("local"))
     return "本地源";
+  if (source === ADDRESS_SOURCE.OSM_HOUSE || raw.startsWith("osm-house"))
+    return "OSM 门牌源";
   if (
     source === ADDRESS_SOURCE.REAL ||
     raw.startsWith("real") ||
@@ -1920,6 +1957,9 @@ function getSourceSiteUrl(source) {
     .trim()
     .toLowerCase();
   if (!raw) return "";
+  if (raw.startsWith("osm-house")) {
+    return SOURCE_SITE_URLS.osmHouse;
+  }
   if (raw.startsWith("local")) {
     return SOURCE_SITE_URLS.local;
   }
@@ -1959,6 +1999,7 @@ function getMapVerifyUrl(identity) {
 
 function getOpenStreetMapUrl(identity) {
   if (!identity) return "";
+  if (identity.osmUrl) return String(identity.osmUrl);
   const lat = Number(identity.lat);
   const lng = Number(identity.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
@@ -2250,6 +2291,10 @@ function getConfidenceText(id) {
   if (id.source === ADDRESS_SOURCE.GLOBAL) {
     return `${label} · 街道级地图校验`;
   }
+  if (id.source === ADDRESS_SOURCE.OSM_HOUSE) {
+    const zipText = id.zipStateVerified ? "ZIP/州一致" : "ZIP/州未验证";
+    return `${label} · 已知门牌 · ${zipText}`;
+  }
   const zipText = id.zipStateVerified ? "ZIP/州一致" : "ZIP/州未验证";
   return `${label} · ${zipText}`;
 }
@@ -2388,12 +2433,17 @@ function populateCountries() {
 }
 
 function updateStateVisibility() {
-  const isGlobal = $("sourceSelect").value === ADDRESS_SOURCE.GLOBAL;
+  const source = $("sourceSelect").value;
+  const isGlobal = source === ADDRESS_SOURCE.GLOBAL;
   $("countryWrap").classList.toggle("is-hidden", !isGlobal);
   $("stateModeWrap").classList.toggle("is-hidden", isGlobal);
   $("stateWrap").classList.toggle(
     "is-hidden",
     isGlobal || $("stateModeSelect").value !== "specific",
+  );
+  $("osmTypeWrap")?.classList.toggle(
+    "is-hidden",
+    source !== ADDRESS_SOURCE.OSM_HOUSE,
   );
 }
 
@@ -2430,6 +2480,12 @@ function init() {
   $("stateModeSelect").value = settings.stateMode;
   $("stateSelect").value = settings.stateCode;
   $("countrySelect").value = settings.countryCode;
+  if (
+    $("osmTypeSelect") &&
+    ["residential", "commercial", "any"].includes(settings.osmType)
+  ) {
+    $("osmTypeSelect").value = settings.osmType;
+  }
   $("fallbackCheck").checked = settings.fallback;
   $("autoGenerateCheck").checked = settings.autoGenerate;
   $("proxyTypeSelect").value = settings.proxyType;
@@ -2504,6 +2560,7 @@ function init() {
   });
   [
     "sourceSelect",
+    "osmTypeSelect",
     "countrySelect",
     "stateModeSelect",
     "stateSelect",

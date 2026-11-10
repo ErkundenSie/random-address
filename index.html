@@ -62,6 +62,7 @@
                 <span class="field-label">地址来源</span>
                 <select id="sourceSelect">
                   <option value="local">本地源（默认）</option>
+                  <option value="osm-house">OSM 门牌源</option>
                   <option value="real">真实地址接口</option>
                   <option value="original">原始本地逻辑</option>
                   <option value="fake">fakeaddressgenerator</option>
@@ -89,6 +90,15 @@
               <label id="stateWrap" class="field-card is-hidden">
                 <span class="field-label">指定州</span>
                 <select id="stateSelect"></select>
+              </label>
+
+              <label id="osmTypeWrap" class="field-card is-hidden">
+                <span class="field-label">门牌类型</span>
+                <select id="osmTypeSelect">
+                  <option value="residential">住宅</option>
+                  <option value="commercial">商业</option>
+                  <option value="any">不限</option>
+                </select>
               </label>
 
               <label class="check-card">

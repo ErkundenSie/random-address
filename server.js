@@ -1554,6 +1554,546 @@ function normalizeLocalIdentity(raw, expectedStateCode = "", point = null) {
   };
 }
 
+const PHOTON_REVERSE_URL = "https://photon.komoot.io/reverse";
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+];
+const OSM_HOUSE_USER_AGENT =
+  "random-address-generator-osm-house/1.0 (https://github.com/jiangnan1224/AddressGenerator)";
+const OSM_HOUSE_TYPES = ["residential", "commercial", "any"];
+const OSM_HOUSE_MAX_ROUNDS = 4;
+const OSM_HOUSE_TIME_BUDGET_MS = 16000;
+const RESIDENTIAL_BUILDINGS = [
+  "house",
+  "residential",
+  "apartments",
+  "detached",
+  "semidetached_house",
+  "terrace",
+  "dormitory",
+  "bungalow",
+];
+const COMMERCIAL_BUILDINGS = ["commercial", "retail", "office"];
+const COMMERCIAL_AMENITIES = [
+  "restaurant",
+  "cafe",
+  "fast_food",
+  "bar",
+  "pub",
+  "biergarten",
+  "food_court",
+  "ice_cream",
+  "nightclub",
+  "bank",
+  "bureau_de_change",
+  "pharmacy",
+  "clinic",
+  "dentist",
+  "doctors",
+  "veterinary",
+  "car_rental",
+  "car_wash",
+  "fuel",
+  "cinema",
+  "marketplace",
+  "driving_school",
+  "language_school",
+  "coworking_space",
+];
+const COMMERCIAL_TOURISM = [
+  "hotel",
+  "hostel",
+  "guest_house",
+  "motel",
+  "apartment",
+];
+const IGNORED_AMENITIES = [
+  "vending_machine",
+  "parking",
+  "parking_space",
+  "parking_entrance",
+  "bicycle_parking",
+  "motorcycle_parking",
+  "atm",
+  "bench",
+  "waste_basket",
+  "recycling",
+  "charging_station",
+  "post_box",
+  "telephone",
+  "toilets",
+  "ticket_validator",
+  "drinking_water",
+  "shelter",
+  "bicycle_rental",
+  "taxi",
+];
+const PHOTON_TAG_FILTERS = {
+  residential: [
+    ...RESIDENTIAL_BUILDINGS.map((building) => `building:${building}`),
+    "place:house",
+  ],
+  commercial: [
+    "shop",
+    "office",
+    "craft",
+    ...COMMERCIAL_AMENITIES.map((amenity) => `amenity:${amenity}`),
+    ...COMMERCIAL_TOURISM.map((tourism) => `tourism:${tourism}`),
+    ...COMMERCIAL_BUILDINGS.map((building) => `building:${building}`),
+  ],
+  any: [],
+};
+const NON_ADDRESS_KEYS = [
+  "highway",
+  "railway",
+  "public_transport",
+  "landuse",
+  "leisure",
+  "natural",
+  "man_made",
+  "power",
+  "barrier",
+  "waterway",
+  "boundary",
+  "historic",
+];
+
+function normalizeOsmHouseType(value) {
+  const type = String(value || "residential")
+    .trim()
+    .toLowerCase();
+  return OSM_HOUSE_TYPES.includes(type) ? type : "residential";
+}
+
+function remainingBudget(deadline, maxMs) {
+  return Math.max(0, Math.min(maxMs, deadline - Date.now()));
+}
+
+function shuffleItems(list) {
+  const items = [...list];
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+  return items;
+}
+
+function classifyOsmTags(tags) {
+  if (tags.amenity && IGNORED_AMENITIES.includes(tags.amenity)) return "other";
+  if (tags.shop || tags.office || tags.craft) return "commercial";
+  if (
+    COMMERCIAL_AMENITIES.includes(tags.amenity) ||
+    COMMERCIAL_TOURISM.includes(tags.tourism)
+  ) {
+    return "commercial";
+  }
+  if (tags.amenity || tags.tourism) return "public";
+  if (COMMERCIAL_BUILDINGS.includes(tags.building)) return "commercial";
+  if (RESIDENTIAL_BUILDINGS.includes(tags.building)) return "residential";
+  if (!tags.building && NON_ADDRESS_KEYS.some((key) => tags[key])) return "other";
+  if (!tags.building || tags.building === "yes") return "unspecified";
+  return "other";
+}
+
+function osmObjectUrl(type, id) {
+  return type && id ? `https://www.openstreetmap.org/${type}/${id}` : "";
+}
+
+function resolveUsStateCode(state) {
+  const value = String(state || "").trim();
+  if (!value) return "";
+  const code = value.toUpperCase();
+  if (LOCAL_STATE_NAMES[code]) return code;
+  return LOCAL_STATE_MAP[value.toLowerCase()] || "";
+}
+
+function pickOsmHouseSeed(stateCode) {
+  const boxes = LOCAL_SOURCE_BOUNDS[stateCode] || LOCAL_SOURCE_BOUNDS.OR;
+  const box = getRandom(boxes);
+  return {
+    state: stateCode,
+    cityHint: box.name,
+    areaCode: box.area,
+    zip: box.zip,
+    lat: (box.lat[0] + box.lat[1]) / 2 + (Math.random() - 0.5) * 0.06,
+    lng: (box.lng[0] + box.lng[1]) / 2 + (Math.random() - 0.5) * 0.06,
+  };
+}
+
+function fromPhotonFeature(feature) {
+  const properties = feature?.properties || {};
+  const [lng, lat] = feature?.geometry?.coordinates || [];
+  const osmTypes = { N: "node", W: "way", R: "relation" };
+  return {
+    parts: {
+      houseNumber: properties.housenumber,
+      street: properties.street,
+      city: properties.city,
+      state: properties.state,
+      postcode: properties.postcode,
+    },
+    countryCode: properties.countrycode,
+    kind: classifyOsmTags({
+      [properties.osm_key]: properties.osm_value,
+    }),
+    category: `${properties.osm_key}=${properties.osm_value}`,
+    lat: Number(lat),
+    lng: Number(lng),
+    osmUrl: osmObjectUrl(osmTypes[properties.osm_type], properties.osm_id),
+  };
+}
+
+function fromOverpassElement(element) {
+  const tags = element?.tags || {};
+  const categoryKey = [
+    "shop",
+    "office",
+    "amenity",
+    "tourism",
+    "craft",
+    "building",
+  ].find((key) => tags[key]);
+  return {
+    parts: {
+      houseNumber: tags["addr:housenumber"],
+      street: tags["addr:street"] || tags["addr:place"],
+      city: tags["addr:city"] || tags["addr:town"] || tags["addr:village"],
+      state: tags["addr:state"],
+      postcode: tags["addr:postcode"],
+    },
+    countryCode: tags["addr:country"],
+    kind: classifyOsmTags(tags),
+    category: categoryKey ? `${categoryKey}=${tags[categoryKey]}` : "address",
+    lat: Number(element.lat ?? element.center?.lat),
+    lng: Number(element.lon ?? element.center?.lon),
+    osmUrl: osmObjectUrl(element.type, element.id),
+  };
+}
+
+function hasOsmHouseAndStreet(candidate) {
+  return Boolean(
+    candidate?.parts?.houseNumber &&
+      candidate?.parts?.street &&
+      Number.isFinite(candidate.lat) &&
+      Number.isFinite(candidate.lng),
+  );
+}
+
+function matchesUsCountry(candidate) {
+  const code = String(candidate?.countryCode || "")
+    .trim()
+    .toUpperCase();
+  return !code || code === "US";
+}
+
+function selectOsmHousePool(candidates, type) {
+  const ofKind = (kind) => candidates.filter((item) => item.kind === kind);
+  if (type === "commercial") return ofKind("commercial");
+  if (type === "residential") {
+    const strict = ofKind("residential");
+    return strict.length ? strict : ofKind("unspecified");
+  }
+  return candidates.filter((item) => item.kind !== "other");
+}
+
+async function searchPhotonHouses(location, type, radiusKm, proxyConfig, deadline) {
+  const timeoutMs = remainingBudget(deadline, 6000);
+  if (timeoutMs < 1200) throw new Error("OSM 门牌源超时");
+  const params = new URLSearchParams({
+    lat: location.lat.toFixed(6),
+    lon: location.lng.toFixed(6),
+    limit: "50",
+    radius: String(radiusKm),
+    layer: "house",
+    lang: "default",
+  });
+  for (const tag of PHOTON_TAG_FILTERS[type] || []) {
+    params.append("osm_tag", tag);
+  }
+  const data = await fetchJson(
+    `${PHOTON_REVERSE_URL}?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "user-agent": OSM_HOUSE_USER_AGENT,
+      },
+    },
+    timeoutMs,
+    proxyConfig,
+  );
+  return (data?.features || []).map(fromPhotonFeature);
+}
+
+function buildOverpassHouseQuery(location, type, radiusKm) {
+  const around = `(around:${Math.min(radiusKm * 1000, 1500)},${location.lat.toFixed(6)},${location.lng.toFixed(6)})`;
+  const houseNumber = '["addr:housenumber"]';
+  let body = `nwr${houseNumber}${around};`;
+  if (type === "residential") {
+    body = `nwr${houseNumber}["building"~"^(${RESIDENTIAL_BUILDINGS.join("|")})$"]${around};
+            node${houseNumber}[!"building"][!"shop"][!"amenity"][!"office"][!"tourism"][!"craft"]${around};`;
+  } else if (type === "commercial") {
+    body = [
+      ...["shop", "office", "craft"].map(
+        (key) => `nwr${houseNumber}["${key}"]${around};`,
+      ),
+      `nwr${houseNumber}["amenity"~"^(${COMMERCIAL_AMENITIES.join("|")})$"]${around};`,
+      `nwr${houseNumber}["tourism"~"^(${COMMERCIAL_TOURISM.join("|")})$"]${around};`,
+      `nwr${houseNumber}["building"~"^(${COMMERCIAL_BUILDINGS.join("|")})$"]${around};`,
+    ].join("");
+  }
+  return `[out:json][timeout:8];(${body});out center tags 40;`;
+}
+
+async function searchOverpassHouses(
+  location,
+  type,
+  radiusKm,
+  proxyConfig,
+  deadline,
+) {
+  const query = buildOverpassHouseQuery(location, type, radiusKm);
+  let lastError = null;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const timeoutMs = remainingBudget(deadline, 7000);
+    if (timeoutMs < 1500) break;
+    try {
+      const data = await fetchJson(
+        endpoint,
+        {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/x-www-form-urlencoded",
+            "user-agent": OSM_HOUSE_USER_AGENT,
+          },
+          body: `data=${encodeURIComponent(query)}`,
+        },
+        timeoutMs,
+        proxyConfig,
+      );
+      return (data?.elements || []).map(fromOverpassElement);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Overpass 不可用");
+}
+
+async function fillOsmHouseFromNominatim(candidate, proxyConfig, deadline) {
+  const timeoutMs = remainingBudget(deadline, 5000);
+  if (timeoutMs < 1200) return;
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(candidate.lat),
+    lon: String(candidate.lng),
+    zoom: "18",
+    addressdetails: "1",
+    "accept-language": "en",
+  });
+  const data = await fetchJson(
+    `${NOMINATIM_REVERSE_API_URL}?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "user-agent": OSM_HOUSE_USER_AGENT,
+        referer: "https://nominatim.openstreetmap.org/ui/reverse.html",
+      },
+    },
+    timeoutMs,
+    proxyConfig,
+  );
+  const address = data?.address || {};
+  const parts = candidate.parts;
+  parts.city =
+    parts.city ||
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality;
+  parts.state = parts.state || address.state;
+  parts.postcode = parts.postcode || address.postcode;
+  parts.street = parts.street || address.road;
+  parts.houseNumber = parts.houseNumber || address.house_number;
+  candidate.countryCode = candidate.countryCode || address.country_code;
+}
+
+function buildOsmHouseIdentity(candidate, stateCode, seed, meta) {
+  const parts = candidate.parts || {};
+  const resultState = resolveUsStateCode(parts.state);
+  if (!resultState || resultState !== stateCode) {
+    throw new Error(
+      `OSM 门牌源返回州不匹配: expected ${stateCode}, got ${resultState || "未知"}`,
+    );
+  }
+  if (!matchesUsCountry(candidate)) {
+    throw new Error(`OSM 门牌源返回非美国地址: ${candidate.countryCode}`);
+  }
+  const zip = normalizeZip5(parts.postcode, "");
+  if (!zip || !isZipInState(zip, resultState)) {
+    throw new Error(`OSM 门牌源 ZIP 与州不一致或缺失: ${zip || "空"} / ${resultState}`);
+  }
+  const street = toTitleCaseText(parts.street);
+  const city = toTitleCaseText(parts.city || seed.cityHint);
+  const houseNumber = String(parts.houseNumber || "").trim();
+  if (!houseNumber || !street || !city) {
+    throw new Error("OSM 门牌源缺少门牌、街道或城市");
+  }
+
+  const firstName = getRandom(LOCAL_SOURCE_NAME_DB.first);
+  const lastName = getRandom(LOCAL_SOURCE_NAME_DB.last);
+  const fullName = `${firstName} ${lastName}`;
+  const emailName = fullName
+    .replace(/[^a-z0-9]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .toLowerCase();
+  const distanceMeters = Math.round(
+    getDistanceMeters(seed, { lat: candidate.lat, lng: candidate.lng }),
+  );
+
+  return {
+    name: fullName,
+    email: `${emailName}.${Math.floor(Math.random() * 9999)}@gmail.com`,
+    phone: makeUsPhone(seed.areaCode || "503"),
+    line1: `${houseNumber} ${street}`,
+    line2: "",
+    city,
+    state: resultState,
+    zip,
+    country: "US",
+    lat: candidate.lat,
+    lng: candidate.lng,
+    areaCode: seed.areaCode || "503",
+    stateName: LOCAL_STATE_NAMES[resultState] || resultState,
+    zipStateVerified: true,
+    zipSource: "osm",
+    confidence: "high",
+    confidenceLabel: "高",
+    confidenceReason: `OSM 已知门牌（${meta.source}，第 ${meta.rounds} 轮，${candidate.kind || "address"}），坐标是建筑本身，且 ZIP 与州一致`,
+    mapVerification: {
+      streetLevel: true,
+      houseNumber: true,
+      waterFiltered: true,
+      coarseFiltered: true,
+      distanceMeters,
+      snapped: false,
+      source: meta.source,
+    },
+    osmUrl: candidate.osmUrl || "",
+    category: candidate.category || "",
+    placeKind: candidate.kind || "",
+    source: "osm-house",
+  };
+}
+
+async function findOsmHouseAddress(stateCode, type, proxyConfig) {
+  const deadline = Date.now() + OSM_HOUSE_TIME_BUDGET_MS;
+  let photonFailures = 0;
+  let lastError = null;
+
+  for (let round = 1; round <= OSM_HOUSE_MAX_ROUNDS && Date.now() < deadline; round += 1) {
+    const seed = pickOsmHouseSeed(stateCode);
+    const radiusKm = round <= 2 ? 1.5 : 3;
+    let candidates = null;
+    let source = "";
+
+    if (photonFailures < 2 && remainingBudget(deadline, 6000) >= 1200) {
+      try {
+        candidates = await searchPhotonHouses(
+          seed,
+          type,
+          radiusKm,
+          proxyConfig,
+          deadline,
+        );
+        source = "photon";
+      } catch (error) {
+        photonFailures += 1;
+        lastError = error;
+      }
+    }
+
+    const usableFromPhoton = candidates
+      ? selectOsmHousePool(
+          candidates.filter(
+            (item) => hasOsmHouseAndStreet(item) && matchesUsCountry(item),
+          ),
+          type,
+        )
+      : [];
+    if (!usableFromPhoton.length && remainingBudget(deadline, 7000) >= 1500) {
+      try {
+        candidates = await searchOverpassHouses(
+          seed,
+          type,
+          radiusKm,
+          proxyConfig,
+          deadline,
+        );
+        source = "overpass";
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+    }
+
+    const usable =
+      source === "photon"
+        ? usableFromPhoton
+        : selectOsmHousePool(
+            (candidates || []).filter(
+              (item) => hasOsmHouseAndStreet(item) && matchesUsCountry(item),
+            ),
+            type,
+          );
+    for (const candidate of shuffleItems(usable).slice(0, 3)) {
+      try {
+        const parts = candidate.parts;
+        const needsFill =
+          !parts.city || !parts.state || !parts.postcode || !matchesUsCountry(candidate);
+        if (needsFill) {
+          await fillOsmHouseFromNominatim(candidate, proxyConfig, deadline);
+        }
+        return buildOsmHouseIdentity(candidate, stateCode, seed, {
+          source,
+          rounds: round,
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    lastError = lastError || new Error(`第 ${round} 轮附近没有符合条件的门牌`);
+  }
+
+  throw lastError || new Error("OSM 门牌源未返回可用地址");
+}
+
+async function handleOsmHouse(req, res) {
+  if (req.method !== "GET") {
+    sendJson(res, 405, { error: "Method Not Allowed" });
+    return;
+  }
+
+  try {
+    const proxyConfig = getProxyConfigFromRequest(req);
+    const requestUrl = new URL(
+      req.url,
+      `http://${req.headers.host || `${HOST}:${PORT}`}`,
+    );
+    const requestedStateCode = normalizeStateCode(
+      requestUrl.searchParams.get("state"),
+    );
+    const stateCode =
+      requestedStateCode || getRandom(Object.keys(LOCAL_SOURCE_BOUNDS));
+    const type = normalizeOsmHouseType(requestUrl.searchParams.get("type"));
+    sendJson(res, 200, await findOsmHouseAddress(stateCode, type, proxyConfig));
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || String(error) });
+  }
+}
+
 async function handleFakeAddress(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Method Not Allowed" });
@@ -1851,6 +2391,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/local-address") {
     await handleLocalAddress(req, res);
+    return;
+  }
+  if (url.pathname === "/api/osm-house") {
+    await handleOsmHouse(req, res);
     return;
   }
   if (url.pathname === "/api/real-address") {
