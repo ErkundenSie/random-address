@@ -1,5 +1,7 @@
 FROM node:24.22.1-alpine
 
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 
 COPY package*.json ./
